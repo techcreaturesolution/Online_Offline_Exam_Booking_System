@@ -273,13 +273,17 @@ router.put('/:id/readiness/:kind', async (req, res) => {
   const items = Object.fromEntries(list.map((c) => [c.key, Boolean(body.items[c.key])]));
   const done = list.every((c) => items[c.key]);
   booking.readiness[kind] = { items, remarks: body.remarks, by: req.user._id, at: new Date(), done };
-  const allDone = readinessKinds(booking.mode).every((k) => booking.readiness[k]?.done);
-  const before = booking.status;
-  booking.status = allDone ? 'ready' : 'confirmed';
   booking.timeline.push(event(req.user, `${kind}_checklist`, done ? 'Completed' : `${Object.values(items).filter(Boolean).length}/${list.length} items`));
   await booking.save();
-  if (before !== 'ready' && booking.status === 'ready') {
-    await notifyBooking(booking, `Center ready: ${booking.bookingNo}`, `${booking.examName}: all readiness checklists are complete.`, { exclude: req.user._id });
+  // Re-read so a checklist saved concurrently by the other role is taken into account.
+  const fresh = await Booking.findById(booking._id).select('mode status readiness').lean();
+  const next = readinessKinds(fresh.mode).every((k) => fresh.readiness?.[k]?.done) ? 'ready' : 'confirmed';
+  booking.status = next;
+  if (fresh.status !== next) {
+    const moved = await Booking.updateOne({ _id: booking._id, status: fresh.status }, { status: next });
+    if (moved.modifiedCount && next === 'ready') {
+      await notifyBooking(booking, `Center ready: ${booking.bookingNo}`, `${booking.examName}: all readiness checklists are complete.`, { exclude: req.user._id });
+    }
   }
   res.json({ booking });
 });
