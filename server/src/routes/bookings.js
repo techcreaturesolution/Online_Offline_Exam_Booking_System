@@ -430,7 +430,13 @@ router.post('/:id/candidates', async (req, res) => {
     if (n > s.candidates) throw new HttpError(400, `Shift ${s.label || s.date} would have ${n} candidates but only ${s.candidates} were booked`);
   }
   if (replace) await Candidate.deleteMany({ booking: booking._id });
-  await Candidate.bulkWrite(docs.map((d) => ({ updateOne: { filter: { booking: d.booking, rollNo: d.rollNo }, update: { $set: { ...d, lab: null, seatNo: '' } }, upsert: true } })));
+  const previousShift = new Map(existing.map((c) => [c.rollNo, String(c.shiftId)]));
+  await Candidate.bulkWrite(
+    docs.map((d) => {
+      const keepSeat = previousShift.get(d.rollNo) === String(d.shiftId);
+      return { updateOne: { filter: { booking: d.booking, rollNo: d.rollNo }, update: { $set: keepSeat ? d : { ...d, lab: null, seatNo: '' } }, upsert: true } };
+    }),
+  );
   booking.timeline.push(event(req.user, 'candidates_uploaded', `${docs.length} candidate(s)${replace ? ' (replaced list)' : ''}`));
   await booking.save();
   res.status(201).json({ imported: docs.length, total: await Candidate.countDocuments({ booking: booking._id }) });
