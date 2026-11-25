@@ -75,6 +75,14 @@ test('takenSeats counts overlapping allocations and ignores the shift being edit
   assert.equal(takenSeats(allocs, { startTime: '10:00', endTime: '12:00', ignore: { booking: 'b1', shiftId: 's1' } }).get('L1'), 20);
 });
 
+test('takenSeats uses peak concurrent seats, not the sum of back-to-back allocations', () => {
+  const allocs = [
+    { lab: 'L1', booking: 'b1', shiftId: 's1', startTime: '09:00', endTime: '11:00', seats: 100 },
+    { lab: 'L1', booking: 'b2', shiftId: 's2', startTime: '11:00', endTime: '13:00', seats: 100 },
+  ];
+  assert.equal(takenSeats(allocs, { startTime: '09:00', endTime: '13:00' }).get('L1'), 100);
+});
+
 test('suggestPlan picks the tightest single lab, otherwise fills the largest labs', () => {
   const labs = [
     { _id: 'A', free: 110, blocked: false },

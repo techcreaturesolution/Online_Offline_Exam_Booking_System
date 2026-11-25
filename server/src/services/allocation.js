@@ -1,16 +1,27 @@
 import { Lab, isBlocked, labMode, usableSeats } from '../models/Lab.js';
 import { LabAllocation } from '../models/LabAllocation.js';
 import { HttpError } from '../utils/httpError.js';
-import { overlaps } from '../utils/time.js';
+import { overlaps, toMinutes } from '../utils/time.js';
 
-/** Seats already taken in each lab for a time window, ignoring one booking shift (the one being edited). */
+/** Peak seats already taken in each lab during a time window, ignoring one booking shift (the one being edited). */
 export function takenSeats(allocations, { startTime, endTime, ignore }) {
-  const taken = new Map();
+  const byLab = new Map();
   for (const a of allocations) {
     if (ignore && String(a.booking) === String(ignore.booking) && String(a.shiftId) === String(ignore.shiftId)) continue;
     if (!overlaps(a.startTime, a.endTime, startTime, endTime)) continue;
     const key = String(a.lab);
-    taken.set(key, (taken.get(key) || 0) + a.seats);
+    if (!byLab.has(key)) byLab.set(key, []);
+    byLab.get(key).push(a);
+  }
+  const taken = new Map();
+  for (const [key, list] of byLab) {
+    const points = [startTime, ...list.map((a) => a.startTime)].map(toMinutes).filter((m) => m >= toMinutes(startTime) && m < toMinutes(endTime));
+    let peak = 0;
+    for (const m of points) {
+      const used = list.filter((a) => toMinutes(a.startTime) <= m && m < toMinutes(a.endTime)).reduce((n, a) => n + a.seats, 0);
+      peak = Math.max(peak, used);
+    }
+    taken.set(key, peak);
   }
   return taken;
 }
