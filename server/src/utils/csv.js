@@ -1,3 +1,5 @@
+import { HttpError } from './httpError.js';
+
 export function csvCell(value) {
   let s = value == null ? '' : String(value);
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
@@ -34,6 +36,7 @@ export function parseCsv(text) {
       cell = '';
     } else cell += ch;
   }
+  if (quoted) throw new HttpError(400, 'CSV has an unclosed quote; check the file and upload again');
   row.push(cell.trim());
   if (row.some(Boolean)) rows.push(row);
   return rows;

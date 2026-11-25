@@ -149,5 +149,6 @@ test('seat plan fills labs in code order and reports candidates without seats', 
 
 test('CSV helpers round-trip quotes and neutralise formulas', () => {
   assert.deepEqual(parseCsv('rollNo,name\r\n1,"Shah, Ravi"\n2,"A ""B"""\n'), [['rollNo', 'name'], ['1', 'Shah, Ravi'], ['2', 'A "B"']]);
+  assert.throws(() => parseCsv('rollNo,name\n1,"Shah\n2,Patel\n'), /unclosed quote/);
   assert.equal(toCsv(['a'], [['=SUM(1)']]), "a\r\n'=SUM(1)");
 });
