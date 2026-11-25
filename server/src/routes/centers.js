@@ -168,15 +168,17 @@ router.get('/centers/:id/schedule', async (req, res) => {
     .populate('lab', 'name code type')
     .sort({ date: 1, startTime: 1 })
     .lean();
-  const bookings = await Booking.find({ _id: { $in: allocations.map((a) => a.booking) } }).select('bookingNo examName status mode institute').populate('institute', 'name').lean();
+  const bookings = await Booking.find({ _id: { $in: allocations.map((a) => a.booking) } }).select('bookingNo examName status mode institute agency').populate('institute', 'name').lean();
   const byId = new Map(bookings.map((b) => [String(b._id), b]));
-  const hideNames = req.user.role === ROLES.INSTITUTE;
+  const hideNames = [ROLES.INSTITUTE, ROLES.AGENCY].includes(req.user.role);
+  const ownField = req.user.role === ROLES.AGENCY ? 'agency' : 'institute';
   res.json({
     from,
     to,
     allocations: allocations.map((a) => {
       const b = byId.get(String(a.booking));
-      const own = b && String(b.institute?._id) === String(req.user.organization);
+      const owner = b?.[ownField];
+      const own = b && String(owner?._id || owner) === String(req.user.organization);
       return { ...a, booking: hideNames && !own ? { status: b?.status } : b };
     }),
   });
