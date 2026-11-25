@@ -118,8 +118,16 @@ router.post('/centers/:id/labs', async (req, res) => {
   res.status(201).json({ lab: await Lab.create({ ...body, center: center._id }) });
 });
 
+/** Allocations of a lab that still hold seats (exams not yet completed or cancelled). */
+async function liveAllocations(filter) {
+  const list = await LabAllocation.find(filter).sort({ date: 1, startTime: 1 }).lean();
+  const done = await Booking.find({ _id: { $in: list.map((a) => a.booking) }, status: { $in: ['completed', 'cancelled'] } }).distinct('_id');
+  const closed = new Set(done.map(String));
+  return list.filter((a) => !closed.has(String(a.booking)));
+}
+
 async function checkReservations(lab) {
-  const future = await LabAllocation.find({ lab: lab._id, date: { $gte: todayIso() } }).sort({ date: 1, startTime: 1 }).lean();
+  const future = await liveAllocations({ lab: lab._id, date: { $gte: todayIso() } });
   if (!future.length) return;
   if (lab.status !== 'active') throw new HttpError(409, `Lab is allocated on ${future[0].date}; release those bookings before changing its status`);
   const usable = usableSeats(lab);
@@ -151,7 +159,7 @@ router.post('/labs/:labId/blocks', async (req, res) => {
   const lab = await loadLabForEdit(req);
   const body = z.object({ from: date, to: date, reason: z.string().trim().min(2) }).parse(req.body);
   if (body.to < body.from) throw new HttpError(400, 'End date is before start date');
-  const clash = await LabAllocation.findOne({ lab: lab._id, date: { $gte: body.from, $lte: body.to } }).lean();
+  const [clash] = await liveAllocations({ lab: lab._id, date: { $gte: body.from, $lte: body.to } });
   if (clash) throw new HttpError(409, `Lab is already allocated on ${clash.date}; release that booking first`);
   lab.maintenanceBlocks.push(body);
   await lab.save();
