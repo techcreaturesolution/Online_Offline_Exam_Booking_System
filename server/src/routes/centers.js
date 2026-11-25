@@ -32,6 +32,10 @@ const centerSchema = z.object({
   active: z.boolean().optional(),
 });
 
+function checkHours(c) {
+  if (c.openTime >= c.closeTime) throw new HttpError(400, 'Closing time must be after opening time');
+}
+
 const INCHARGE_FIELDS = ['address', 'pincode', 'facilities', 'openTime', 'closeTime'];
 
 function summarize(center, labs) {
@@ -58,6 +62,7 @@ router.get('/centers', async (req, res) => {
 
 router.post('/centers', requireRoles(ROLES.SUPER_ADMIN), async (req, res) => {
   const body = centerSchema.parse(req.body);
+  checkHours(body);
   if (body.vendor && !(await Organization.exists({ _id: body.vendor, kind: 'vendor' }))) throw new HttpError(400, 'Vendor not found');
   if (await Center.exists({ code: body.code.toUpperCase() })) throw new HttpError(409, 'Center code already exists');
   res.status(201).json({ center: await Center.create(body) });
@@ -79,6 +84,7 @@ router.put('/centers/:id', async (req, res) => {
   } else if (req.user.role === ROLES.CENTER && managesCenter(req.user, center._id)) {
     for (const k of INCHARGE_FIELDS) if (body[k] !== undefined) center[k] = body[k];
   } else throw new HttpError(403, 'Only the Super Admin or this center\'s In-Charge can edit the center');
+  checkHours(center);
   await center.save();
   res.json({ center });
 });
