@@ -8,7 +8,7 @@ import { LabAllocation } from '../models/LabAllocation.js';
 import { Organization } from '../models/Organization.js';
 import { ROLES } from '../models/roles.js';
 import { assertCanManageLab, centerScope, managesCenter } from '../services/access.js';
-import { availability } from '../services/allocation.js';
+import { availability, takenSeats } from '../services/allocation.js';
 import { HttpError } from '../utils/httpError.js';
 import { DATE_RE, TIME_RE, addDays, todayIso } from '../utils/time.js';
 
@@ -118,6 +118,17 @@ router.post('/centers/:id/labs', async (req, res) => {
   res.status(201).json({ lab: await Lab.create({ ...body, center: center._id }) });
 });
 
+async function checkReservations(lab) {
+  const future = await LabAllocation.find({ lab: lab._id, date: { $gte: todayIso() } }).sort({ date: 1, startTime: 1 }).lean();
+  if (!future.length) return;
+  if (lab.status !== 'active') throw new HttpError(409, `Lab is allocated on ${future[0].date}; release those bookings before changing its status`);
+  const usable = usableSeats(lab);
+  for (const a of future) {
+    const peak = takenSeats(future.filter((x) => x.date === a.date), { startTime: a.startTime, endTime: a.endTime }).get(String(lab._id)) || 0;
+    if (peak > usable) throw new HttpError(409, `Lab would have ${usable} usable seats but ${peak} are allocated on ${a.date} ${a.startTime}-${a.endTime}`);
+  }
+}
+
 async function loadLabForEdit(req) {
   const lab = await Lab.findById(req.params.labId);
   if (!lab) throw new HttpError(404, 'Lab not found');
@@ -131,6 +142,7 @@ router.put('/labs/:labId', async (req, res) => {
   if (body.type && body.type !== lab.type) assertCanManageLab(req.user, lab.center, body.type);
   Object.assign(lab, body);
   checkLab(lab);
+  await checkReservations(lab);
   await lab.save();
   res.json({ lab });
 });
