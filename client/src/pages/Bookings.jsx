@@ -18,7 +18,11 @@ export default function Bookings() {
     api.get('/centers').then((r) => setCenters(r.data.centers)).catch(() => {});
   }, []);
   useEffect(() => {
-    api.get(`/bookings?${query}`).then((r) => { setBookings(r.data.bookings); setError(''); }).catch((e) => setError(errorMessage(e)));
+    let stale = false;
+    api.get(`/bookings?${query}`)
+      .then((r) => { if (!stale) { setBookings(r.data.bookings); setError(''); } })
+      .catch((e) => { if (!stale) setError(errorMessage(e)); });
+    return () => { stale = true; };
   }, [query]);
 
   const setParam = (k, v) => {

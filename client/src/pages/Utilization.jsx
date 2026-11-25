@@ -14,9 +14,13 @@ export default function Utilization() {
     api.get('/centers').then((r) => setCenters(r.data.centers)).catch(() => {});
   }, []);
   useEffect(() => {
-    api.get(`/reports/utilization?${qs}`).then((r) => { setData(r.data); setError(''); }).catch((e) => setError(errorMessage(e)));
+    let stale = false;
+    api.get(`/reports/utilization?${qs}`)
+      .then((r) => { if (!stale) { setData(r.data); setError(''); } })
+      .catch((e) => { if (!stale) setError(errorMessage(e)); });
+    return () => { stale = true; };
   }, [qs]);
-  const set = (k) => (e) => setQ({ ...q, [k]: e.target.value });
+  const set = (k) => (e) => { const v = e.target.value; setQ((prev) => ({ ...prev, [k]: v })); };
 
   return (
     <div className="space-y-5">
