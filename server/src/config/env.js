@@ -11,6 +11,7 @@ const bool = (v, def = false) => (v === undefined || v === '' ? def : ['1', 'tru
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 5000),
+  trustProxy: /^\d+$/.test(process.env.TRUST_PROXY || '') ? Number(process.env.TRUST_PROXY) : bool(process.env.TRUST_PROXY, false),
   mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thespot_exam_booking',
   jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',

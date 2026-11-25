@@ -18,7 +18,7 @@ import reportRoutes from './routes/reports.js';
 
 export function createApp() {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', env.trustProxy);
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env.clientOrigins, credentials: true }));
   app.use(express.json({ limit: '3mb' }));
