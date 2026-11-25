@@ -3,8 +3,10 @@ import { env } from '../config/env.js';
 import { User } from '../models/User.js';
 import { HttpError } from '../utils/httpError.js';
 
+const passwordVersion = (user) => user.passwordChangedAt?.getTime() || 0;
+
 export function signToken(user) {
-  return jwt.sign({ sub: String(user._id), role: user.role }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
+  return jwt.sign({ sub: String(user._id), role: user.role, pwv: passwordVersion(user) }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
 }
 
 export async function requireAuth(req, _res, next) {
@@ -19,7 +21,7 @@ export async function requireAuth(req, _res, next) {
   }
   const user = await User.findById(payload.sub);
   if (!user || user.status !== 'active') throw new HttpError(401, 'Account not found, pending approval or disabled');
-  if (user.passwordChangedAt && payload.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) throw new HttpError(401, 'Password changed; please sign in again');
+  if ((payload.pwv || 0) !== passwordVersion(user)) throw new HttpError(401, 'Password changed; please sign in again');
   req.user = user;
   next();
 }
