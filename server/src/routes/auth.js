@@ -70,8 +70,9 @@ router.put('/me/password', requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id).select('+passwordHash');
   if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new HttpError(400, 'Current password is incorrect');
   user.passwordHash = await bcrypt.hash(newPassword, 10);
+  user.passwordChangedAt = new Date();
   await user.save();
-  res.json({ ok: true });
+  res.json({ ok: true, token: signToken(user) });
 });
 
 export default router;

@@ -64,7 +64,10 @@ router.put('/users/:id', async (req, res) => {
   }
   const role = body.role || user.role;
   const links = await checkLinks(role, body.organization !== undefined ? body.organization : user.organization, body.centers || user.centers.map(String));
-  if (body.password) user.passwordHash = await bcrypt.hash(body.password, 10);
+  if (body.password) {
+    user.passwordHash = await bcrypt.hash(body.password, 10);
+    user.passwordChangedAt = new Date();
+  }
   for (const k of ['name', 'email', 'phone', 'role', 'status']) if (body[k] !== undefined) user[k] = body[k];
   Object.assign(user, links);
   await user.save();

@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema(
     organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null },
     centers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Center' }],
     lastLoginAt: Date,
+    passwordChangedAt: Date,
   },
   { timestamps: true },
 );

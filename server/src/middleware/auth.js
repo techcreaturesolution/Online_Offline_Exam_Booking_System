@@ -19,6 +19,7 @@ export async function requireAuth(req, _res, next) {
   }
   const user = await User.findById(payload.sub);
   if (!user || user.status !== 'active') throw new HttpError(401, 'Account not found, pending approval or disabled');
+  if (user.passwordChangedAt && payload.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) throw new HttpError(401, 'Password changed; please sign in again');
   req.user = user;
   next();
 }
