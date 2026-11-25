@@ -27,6 +27,9 @@ export const env = {
   },
 };
 
-if (env.nodeEnv === 'production' && env.jwtSecret === 'change-me-in-production') {
-  throw new Error('JWT_SECRET must be set in production');
+export function assertSecureConfig() {
+  const devLike = ['development', 'test'].includes(process.env.NODE_ENV);
+  if (!devLike && env.jwtSecret === 'change-me-in-production') {
+    throw new Error('Set JWT_SECRET to a long random value (or NODE_ENV=development for local use)');
+  }
 }
