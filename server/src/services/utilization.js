@@ -31,7 +31,9 @@ export function computeUtilization({ labs, centers, allocations, bookings, from,
       seatsAllocated += a.seats;
       sessions += 1;
       const shift = shiftById.get(String(a.shiftId));
-      if (shift?.attendance?.present != null && shift.candidates > 0) {
+      if (a.present != null) {
+        attendedSeatHours += Math.min(a.present, a.seats) * hours;
+      } else if (shift?.attendance?.present != null && shift.candidates > 0) {
         attendedSeatHours += a.seats * hours * Math.min(1, shift.attendance.present / shift.candidates);
       }
     }

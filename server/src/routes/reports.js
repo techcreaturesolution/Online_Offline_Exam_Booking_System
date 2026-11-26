@@ -88,4 +88,46 @@ router.get('/utilization.csv', async (req, res) => {
   res.send(toCsv(['Center', 'Lab Code', 'Lab', 'Type', 'Usable Seats', 'Open Days', 'Sessions', 'Capacity Seat-Hours', 'Allocated Seat-Hours', 'Attended Seat-Hours', 'Utilization %', 'Attended Utilization %'], rows));
 });
 
+/** Lab planning: every lab allocated to bookings in scope (exam shifts and mock days) with seat ranges. */
+router.get('/planning', async (req, res) => {
+  const from = DATE_RE.test(req.query.from || '') ? req.query.from : todayIso();
+  const to = DATE_RE.test(req.query.to || '') ? req.query.to : addDays(from, 60);
+  if (to < from) throw new HttpError(400, 'End date is before start date');
+  const bookings = await Booking.find({ ...(await bookingScope(req.user)), status: { $ne: 'cancelled' } })
+    .select('bookingNo examName mode status shifts mock institute agency')
+    .populate('institute', 'name')
+    .populate('agency', 'name')
+    .lean();
+  const byId = new Map(bookings.map((b) => [String(b._id), b]));
+  const allocations = await LabAllocation.find({ booking: { $in: bookings.map((b) => b._id) }, date: { $gte: from, $lte: to } })
+    .populate('lab', 'name code type floor')
+    .populate('center', 'name code')
+    .populate('allocatedBy', 'name role')
+    .sort({ date: 1, startTime: 1 })
+    .lean();
+  const rows = allocations.map((a) => {
+    const b = byId.get(String(a.booking));
+    const shift = b.shifts.find((s) => String(s._id) === String(a.shiftId));
+    const seatFrom = a.seatFrom || 1;
+    return {
+      _id: a._id,
+      kind: a.kind || 'exam',
+      date: a.date,
+      startTime: a.startTime,
+      endTime: a.endTime,
+      shiftLabel: a.kind === 'mock' ? 'Mock day' : shift?.label || '',
+      booking: { _id: b._id, bookingNo: b.bookingNo, examName: b.examName, status: b.status, institute: b.institute?.name, agency: b.agency?.name },
+      mockStatus: a.kind === 'mock' ? b.mock?.status || null : null,
+      center: a.center,
+      lab: a.lab,
+      seats: a.seats,
+      seatFrom,
+      seatTo: seatFrom + a.seats - 1,
+      present: a.present,
+      allocatedBy: a.allocatedBy,
+    };
+  });
+  res.json({ from, to, rows });
+});
+
 export default router;
