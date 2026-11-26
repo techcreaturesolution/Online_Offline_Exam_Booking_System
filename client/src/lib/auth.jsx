@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from './api.js';
+import { api, getToken, SUPPORT_KEY } from './api.js';
 
 const AuthContext = createContext(null);
 
@@ -7,10 +7,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [impersonatedBy, setImpersonatedBy] = useState(null);
-  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('eb_token')));
+  const [loading, setLoading] = useState(() => Boolean(getToken()));
 
   useEffect(() => {
-    if (!localStorage.getItem('eb_token')) return;
+    if (!getToken()) return;
     api
       .get('/auth/me')
       .then((r) => {
@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('eb_token');
-    sessionStorage.removeItem('eb_owner_token');
+    sessionStorage.removeItem(SUPPORT_KEY);
     setUser(null);
     setTenant(null);
     setImpersonatedBy(null);

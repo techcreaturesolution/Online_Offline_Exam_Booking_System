@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Empty, Spinner, Stat } from '../components/ui.jsx';
-import { api, errorMessage } from '../lib/api.js';
+import { api, errorMessage, SUPPORT_KEY } from '../lib/api.js';
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
 const STATUSES = ['trial', 'active', 'suspended', 'cancelled'];
@@ -35,8 +35,7 @@ export default function Platform() {
     if (!reason) return;
     try {
       const r = await api.post(`/platform/tenants/${t._id}/impersonate`, { reason });
-      sessionStorage.setItem('eb_owner_token', localStorage.getItem('eb_token'));
-      localStorage.setItem('eb_token', r.data.token);
+      sessionStorage.setItem(SUPPORT_KEY, r.data.token);
       window.location.href = '/dashboard';
     } catch (e) {
       setError(errorMessage(e));
@@ -96,7 +95,7 @@ export default function Platform() {
                     ) : (
                       <button className="btn-secondary" onClick={() => window.confirm(`Suspend ${t.name}? Its users will be signed out.`) && update(t, { status: 'suspended' })}>Suspend</button>
                     )}
-                    <button className="btn-secondary" onClick={() => impersonate(t)}>Sign in as admin</button>
+                    {!['suspended', 'cancelled'].includes(t.status) && <button className="btn-secondary" onClick={() => impersonate(t)}>Sign in as admin</button>}
                   </td>
                 </tr>
               ))}

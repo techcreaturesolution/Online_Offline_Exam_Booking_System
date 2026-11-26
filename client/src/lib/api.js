@@ -2,8 +2,12 @@ import axios from 'axios';
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' });
 
+// A platform support session lives only in the tab that opened it (sessionStorage); the owner's own token stays in localStorage.
+export const SUPPORT_KEY = 'eb_support_token';
+export const getToken = () => sessionStorage.getItem(SUPPORT_KEY) || localStorage.getItem('eb_token');
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('eb_token');
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -11,7 +15,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 && localStorage.getItem('eb_token')) {
+    if (err.response?.status === 401 && sessionStorage.getItem(SUPPORT_KEY)) {
+      sessionStorage.removeItem(SUPPORT_KEY);
+      location.href = '/platform';
+    } else if (err.response?.status === 401 && localStorage.getItem('eb_token')) {
       localStorage.removeItem('eb_token');
       if (!location.pathname.startsWith('/login')) location.href = '/login';
     }

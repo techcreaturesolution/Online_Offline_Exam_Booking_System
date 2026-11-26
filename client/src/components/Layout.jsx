@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { api, SUPPORT_KEY } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { ROLE_LABELS, fmtDateTime } from '../lib/format.js';
 
@@ -74,8 +74,7 @@ export default function Layout() {
   const { user, tenant, impersonatedBy, logout } = useAuth();
   const owner = user.role === 'platform_owner';
   const exitSupport = () => {
-    localStorage.setItem('eb_token', sessionStorage.getItem('eb_owner_token') || '');
-    sessionStorage.removeItem('eb_owner_token');
+    sessionStorage.removeItem(SUPPORT_KEY);
     window.location.href = '/platform';
   };
   const navigate = useNavigate();
