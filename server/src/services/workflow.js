@@ -135,14 +135,6 @@ export function denyReason(action, user, booking, ctx = {}) {
       if (!admin && !isCenterVendor(user, booking, ctx.center)) return 'Only the Booking Vendor manages billing';
       if (status === 'cancelled') return 'Booking is cancelled';
       return null;
-    case 'candidates':
-      if (!admin && !isOwnInstitute(user, booking)) return 'Only the booking institute uploads candidates';
-      if (!['requested', 'allocated', 'confirmed', 'ready'].includes(status)) return 'Candidates can be uploaded only before the exam starts';
-      return null;
-    case 'seatPlan':
-      if (!admin && !isOwnInstitute(user, booking) && !isCenterIncharge(user, booking)) return 'Only the institute or Center In-Charge generates the seat plan';
-      if (!['confirmed', 'ready'].includes(status)) return 'Seat plan is generated after the allocation is confirmed';
-      return null;
     case 'feedback':
       if (!isOwnInstitute(user, booking)) return 'Only the booking institute can rate the center';
       if (status !== 'completed') return 'Feedback opens after the exam is completed';
@@ -153,6 +145,6 @@ export function denyReason(action, user, booking, ctx = {}) {
 }
 
 export function allowedActions(user, booking, ctx = {}) {
-  const actions = ['edit', 'allocate', 'review', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'candidates', 'seatPlan', 'feedback', 'mockRequest', 'mockAllocate', 'mockPermission', 'mockResult'];
+  const actions = ['edit', 'allocate', 'review', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'feedback', 'mockRequest', 'mockAllocate', 'mockPermission', 'mockResult'];
   return actions.filter((a) => denyReason(a, user, booking, ctx) === null);
 }

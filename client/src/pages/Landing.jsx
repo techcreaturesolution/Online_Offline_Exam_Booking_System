@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 const ROLES = [
-  ['University / Institute', 'Request online or offline exam slots, upload candidates, verify offline hall allocation and track counts, attendance and lab utilization.'],
+  ['University / Institute', 'Request online or offline exam slots with candidate counts, verify offline hall allocation and track counts, attendance and lab utilization.'],
   ['Booking Vendor', 'Manages center bookings: verifies the Network Admin\'s lab allocation for online exams, assigns agencies and handles billing.'],
   ['Network Admin', 'Allocates computer labs per shift with live seat availability and conflict checks, then completes the network readiness checklist.'],
   ['Center In-Charge', 'Allocates exam halls for offline exams, completes the center checklist, records attendance and reports incidents.'],
@@ -15,7 +15,7 @@ const FEATURES = [
   'Auto-suggested allocation (best-fit lab, else largest labs first)',
   'Lab utilization reports: capacity vs allocated vs attended seat-hours',
   'Readiness checklists for network and center',
-  'Candidate CSV upload, auto seat plan and printable seat list',
+  'Exam-day present / absent counts per classroom, block and center',
   'Attendance counts, incident log and post-exam center rating',
   'In-app notifications (optional e-mail), CSV exports and billing',
 ];

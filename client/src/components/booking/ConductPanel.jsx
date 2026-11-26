@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert } from '../ui.jsx';
 import { api, errorMessage } from '../../lib/api.js';
+import CountsTable from '../CountsTable.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { ROLE_LABELS, fmtDate, fmtDateTime, todayIso } from '../../lib/format.js';
 
@@ -105,6 +106,9 @@ export default function ConductPanel({ booking, allocation, actions, reload }) {
           </table>
         </div>
       ) : <p className="text-sm text-slate-500">Attendance is recorded once the exam is started.</p>}
+      {showAttendance && booking.shifts.map((s, i) => (
+        <CountsTable key={`counts-${s._id}`} title={`${s.label || `Shift ${i + 1}`} · ${fmtDate(s.date)}: classroom, block and center counts`} counts={allocation?.shifts.find((x) => String(x.shiftId) === String(s._id))?.counts} />
+      ))}
 
       <div>
         <h3 className="mb-2 font-semibold">Incidents ({booking.incidents.length})</h3>

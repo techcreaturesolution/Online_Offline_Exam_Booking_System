@@ -5,6 +5,7 @@ import { Lab } from '../models/Lab.js';
 import { LabAllocation } from '../models/LabAllocation.js';
 import { ROLES } from '../models/roles.js';
 import { bookingScope, centerScope } from '../services/access.js';
+import { attendanceCounts } from '../services/counts.js';
 import { bookingCounts, computeUtilization } from '../services/utilization.js';
 import { toCsv } from '../utils/csv.js';
 import { HttpError } from '../utils/httpError.js';
@@ -89,6 +90,25 @@ router.get('/utilization.csv', async (req, res) => {
 });
 
 /** Lab planning: every lab allocated to bookings in scope (exam shifts and mock days) with seat ranges. */
+router.get('/attendance', async (req, res) => {
+  const date = DATE_RE.test(req.query.date || '') ? req.query.date : todayIso();
+  const bookings = await Booking.find({ ...(await bookingScope(req.user)), status: { $ne: 'cancelled' }, 'shifts.date': date }).select('shifts').lean();
+  const allocations = await LabAllocation.find({ booking: { $in: bookings.map((b) => b._id) }, date, kind: { $ne: 'mock' } })
+    .populate('lab', 'name code block')
+    .populate('center', 'name code city')
+    .lean();
+  const centers = new Map();
+  for (const a of allocations) {
+    const key = String(a.center._id);
+    if (!centers.has(key)) centers.set(key, { center: a.center, allocations: [] });
+    centers.get(key).allocations.push(a);
+  }
+  const rows = [...centers.values()]
+    .map(({ center, allocations: list }) => ({ center, ...attendanceCounts(list) }))
+    .sort((x, y) => x.center.name.localeCompare(y.center.name));
+  res.json({ date, centers: rows });
+});
+
 router.get('/planning', async (req, res) => {
   const from = DATE_RE.test(req.query.from || '') ? req.query.from : todayIso();
   const to = DATE_RE.test(req.query.to || '') ? req.query.to : addDays(from, 60);

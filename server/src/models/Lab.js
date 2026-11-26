@@ -11,6 +11,7 @@ const labSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     code: { type: String, required: true, trim: true, uppercase: true },
     type: { type: String, enum: ['computer_lab', 'exam_hall', 'classroom'], required: true },
+    block: { type: String, trim: true, default: '' },
     floor: { type: String, trim: true, default: '' },
     capacity: { type: Number, required: true, min: 1 },
     systemsTotal: { type: Number, default: 0, min: 0 },

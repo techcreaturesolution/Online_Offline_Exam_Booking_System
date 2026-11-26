@@ -2,6 +2,7 @@ import { Lab, isBlocked, labMode, usableSeats } from '../models/Lab.js';
 import { LabAllocation } from '../models/LabAllocation.js';
 import { HttpError } from '../utils/httpError.js';
 import { overlaps, toMinutes } from '../utils/time.js';
+import { attendanceCounts } from './counts.js';
 import { withLocks } from './locks.js';
 
 /** Peak seats already taken in each lab during a time window, ignoring one booking shift (the one being edited). */
@@ -128,11 +129,11 @@ export async function saveAllocation({ booking, shiftId, kind = 'exam', window, 
 }
 
 export async function allocationSummary(booking) {
-  const allocations = await LabAllocation.find({ booking: booking._id, kind: { $ne: 'mock' } }).populate('lab', 'name code type floor').lean();
+  const allocations = await LabAllocation.find({ booking: booking._id, kind: { $ne: 'mock' } }).populate('lab', 'name code type block floor').lean();
   const shifts = booking.shifts.map((s) => {
     const list = allocations.filter((a) => String(a.shiftId) === String(s._id));
     const seats = list.reduce((n, a) => n + a.seats, 0);
-    return { shiftId: s._id, seats, candidates: s.candidates, covered: seats >= s.candidates, allocations: list };
+    return { shiftId: s._id, seats, candidates: s.candidates, covered: seats >= s.candidates, allocations: list, counts: attendanceCounts(list) };
   });
   return { shifts, complete: shifts.every((s) => s.covered), totalSeats: shifts.reduce((n, s) => n + s.seats, 0) };
 }

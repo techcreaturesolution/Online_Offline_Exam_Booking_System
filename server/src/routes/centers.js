@@ -93,6 +93,7 @@ const labSchema = z.object({
   name: z.string().trim().min(1),
   code: z.string().trim().min(1).max(20),
   type: z.enum(['computer_lab', 'exam_hall', 'classroom']),
+  block: z.string().trim().max(40).optional().default(''),
   floor: z.string().trim().optional().default(''),
   capacity: z.number().int().min(1).max(5000),
   systemsTotal: z.number().int().min(0).optional().default(0),

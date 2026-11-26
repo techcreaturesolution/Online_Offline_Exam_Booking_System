@@ -69,10 +69,9 @@ paths:
   /bookings/{id}/incidents: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Exam day], responses: { '201': { description: Created } } } }
   /bookings/{id}/complete: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Exam day], responses: { '200': { description: OK } } } }
   /bookings/{id}/cancel: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Bookings], responses: { '200': { description: OK } } } }
-  /bookings/{id}/candidates: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Candidates], summary: CSV upload, responses: { '200': { description: OK } } } }
-  /bookings/{id}/seat-plan: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Candidates], responses: { '200': { description: OK } } } }
   /reports/dashboard: { get: { tags: [Reports], responses: { '200': { description: Role dashboard } } } }
   /reports/utilization: { get: { tags: [Reports], parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } } }
   /reports/utilization.csv: { get: { tags: [Reports], responses: { '200': { description: CSV } } } }
+  /reports/attendance: { get: { tags: [Reports], summary: Candidates / present / absent per classroom, block and center for an exam date, parameters: [{ name: date, in: query, schema: { type: string } }], responses: { '200': { description: OK } } } }
   /reports/planning: { get: { tags: [Reports], summary: Lab planning with seat ranges (exams and mock days), responses: { '200': { description: OK } } } }
   /notifications: { get: { tags: [Notifications], responses: { '200': { description: OK } } } }

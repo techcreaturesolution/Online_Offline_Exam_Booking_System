@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { usableSeats } from '../src/models/Lab.js';
 import { firstFreeRange, suggestPlan, takenSeats, validatePlan } from '../src/services/allocation.js';
-import { buildSeatPlan } from '../src/services/seatPlan.js';
+import { attendanceCounts } from '../src/services/counts.js';
 import { bookingCounts, computeUtilization } from '../src/services/utilization.js';
 import { allocatorRole, denyReason, reviewerRole } from '../src/services/workflow.js';
 import { parseCsv, toCsv } from '../src/utils/csv.js';
@@ -136,17 +136,6 @@ test('bookingCounts totals candidates and attendance, skipping cancelled booking
   assert.deepEqual(r.byMode, { online: 1, offline: 2 });
 });
 
-test('seat plan fills labs in code order and reports candidates without seats', () => {
-  const candidates = ['3', '1', '2', '10'].map((r) => ({ _id: r, rollNo: r, shiftId: 'S' }));
-  const allocations = [
-    { shiftId: 'S', seats: 1, lab: { _id: 'B', code: 'LAB-B' } },
-    { shiftId: 'S', seats: 2, lab: { _id: 'A', code: 'LAB-A' } },
-  ];
-  const { updates, unseated } = buildSeatPlan(candidates, allocations);
-  assert.deepEqual(updates.map((u) => `${u._id}:${u.seatNo}`), ['1:LAB-A-001', '2:LAB-A-002', '3:LAB-B-001']);
-  assert.deepEqual(unseated, ['10']);
-});
-
 test('CSV helpers round-trip quotes and neutralise formulas', () => {
   assert.deepEqual(parseCsv('rollNo,name\r\n1,"Shah, Ravi"\n2,"A ""B"""\n'), [['rollNo', 'name'], ['1', 'Shah, Ravi'], ['2', 'A "B"']]);
   assert.throws(() => parseCsv('rollNo,name\n1,"Shah\n2,Patel\n'), /unclosed quote/);
@@ -159,9 +148,6 @@ test('overlapping exams in one lab get separate seat ranges', () => {
   assert.equal(firstFreeRange([{ seatFrom: 41, seats: 20 }], 40, 100), 1);
   assert.equal(firstFreeRange([{ seatFrom: 31, seats: 20 }], 40, 100), 51);
   assert.equal(firstFreeRange([{ seatFrom: 31, seats: 40 }], 40, 100), null);
-  const lab = { _id: 'l1', code: 'LAB1' };
-  const { updates } = buildSeatPlan([{ _id: 'c1', rollNo: '1', shiftId: 's' }], [{ shiftId: 's', lab, seats: 10, seatFrom: 41 }]);
-  assert.equal(updates[0].seatNo, 'LAB1-041');
 });
 
 test('exam start and attendance are allowed only on the exam date', () => {
@@ -175,4 +161,16 @@ test('exam start and attendance are allowed only on the exam date', () => {
   const live = { ...b, status: 'in_progress' };
   assert.equal(denyReason('attendance', agency, live, { today: '2030-05-10' }), null);
   assert.match(denyReason('attendance', agency, live, { today: '2030-05-12' }), /exam date/);
+});
+
+test('attendanceCounts totals classrooms by block and for the center', () => {
+  const allocs = [
+    { seats: 40, present: 35, lab: { _id: 'r1', code: 'CR-101', name: 'Room 101', block: 'Block A' } },
+    { seats: 30, present: 30, lab: { _id: 'r2', code: 'CR-102', name: 'Room 102', block: 'Block A' } },
+    { seats: 20, present: null, lab: { _id: 'r3', code: 'HALL-1', name: 'Hall', block: '' } },
+  ];
+  const c = attendanceCounts(allocs);
+  assert.deepEqual(c.classrooms.map((r) => [r.code, r.allocated, r.present, r.absent]), [['CR-101', 40, 35, 5], ['CR-102', 30, 30, 0], ['HALL-1', 20, null, null]]);
+  assert.deepEqual(c.blocks.map((b) => [b.block, b.allocated, b.present, b.absent]), [['Block A', 70, 65, 5], ['No block', 20, 0, 0]]);
+  assert.deepEqual(c.total, { allocated: 90, present: 65, absent: 5, pending: 1 });
 });

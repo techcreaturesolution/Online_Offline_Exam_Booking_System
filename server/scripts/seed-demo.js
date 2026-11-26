@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { connectDb } from '../src/config/db.js';
 import { Booking } from '../src/models/Booking.js';
-import { Candidate } from '../src/models/Candidate.js';
 import { Center } from '../src/models/Center.js';
 import { Counter } from '../src/models/Counter.js';
 import { Lab } from '../src/models/Lab.js';
@@ -16,7 +15,7 @@ import { addDays, todayIso } from '../src/utils/time.js';
 export const DEMO_PASSWORD = 'Demo@1234';
 
 export async function seedDemo() {
-  await Promise.all([Booking, Candidate, Center, Counter, Lab, LabAllocation, Notification, Organization, User].map((m) => m.deleteMany({})));
+  await Promise.all([Booking, Center, Counter, Lab, LabAllocation, Notification, Organization, User].map((m) => m.deleteMany({})));
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
   const [gtu, sim, vendor, agency, agency2] = await Organization.create([
@@ -34,11 +33,11 @@ export async function seedDemo() {
   ]);
 
   const labs = await Lab.create([
-    { center: ahm._id, name: 'Computer Lab A', code: 'LAB-A', type: 'computer_lab', floor: 'Ground', capacity: 120, systemsTotal: 120, systemsWorking: 116, bufferSeats: 6, bandwidthMbps: 200 },
-    { center: ahm._id, name: 'Computer Lab B', code: 'LAB-B', type: 'computer_lab', floor: 'First', capacity: 80, systemsTotal: 80, systemsWorking: 80, bufferSeats: 4, bandwidthMbps: 200 },
-    { center: ahm._id, name: 'Computer Lab C', code: 'LAB-C', type: 'computer_lab', floor: 'First', capacity: 60, systemsTotal: 60, systemsWorking: 58, bufferSeats: 3, bandwidthMbps: 100, maintenanceBlocks: [{ from: addDays(todayIso(), 10), to: addDays(todayIso(), 12), reason: 'UPS replacement' }] },
-    { center: ahm._id, name: 'Main Exam Hall', code: 'HALL-1', type: 'exam_hall', floor: 'Ground', capacity: 200, bufferSeats: 10 },
-    { center: ahm._id, name: 'Classroom 201', code: 'CR-201', type: 'classroom', floor: 'Second', capacity: 60 },
+    { center: ahm._id, name: 'Computer Lab A', code: 'LAB-A', block: 'Block A', type: 'computer_lab', floor: 'Ground', capacity: 120, systemsTotal: 120, systemsWorking: 116, bufferSeats: 6, bandwidthMbps: 200 },
+    { center: ahm._id, name: 'Computer Lab B', code: 'LAB-B', block: 'Block A', type: 'computer_lab', floor: 'First', capacity: 80, systemsTotal: 80, systemsWorking: 80, bufferSeats: 4, bandwidthMbps: 200 },
+    { center: ahm._id, name: 'Computer Lab C', code: 'LAB-C', block: 'Block A', type: 'computer_lab', floor: 'First', capacity: 60, systemsTotal: 60, systemsWorking: 58, bufferSeats: 3, bandwidthMbps: 100, maintenanceBlocks: [{ from: addDays(todayIso(), 10), to: addDays(todayIso(), 12), reason: 'UPS replacement' }] },
+    { center: ahm._id, name: 'Main Exam Hall', code: 'HALL-1', block: 'Block B', type: 'exam_hall', floor: 'Ground', capacity: 200, bufferSeats: 10 },
+    { center: ahm._id, name: 'Classroom 201', code: 'CR-201', block: 'Block B', type: 'classroom', floor: 'Second', capacity: 60 },
     { center: srt._id, name: 'Lab 1', code: 'S-LAB1', type: 'computer_lab', floor: 'Ground', capacity: 150, systemsTotal: 150, systemsWorking: 145, bufferSeats: 5, bandwidthMbps: 300 },
     { center: srt._id, name: 'Lab 2', code: 'S-LAB2', type: 'computer_lab', floor: 'First', capacity: 100, systemsTotal: 100, systemsWorking: 92, bufferSeats: 2, bandwidthMbps: 300 },
     { center: vad._id, name: 'Hall North', code: 'V-HN', type: 'exam_hall', floor: 'Ground', capacity: 300, bufferSeats: 10 },

@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { Booking } from '../models/Booking.js';
-import { Candidate } from '../models/Candidate.js';
 import { Center } from '../models/Center.js';
 import { nextSeq } from '../models/Counter.js';
 import { LabAllocation } from '../models/LabAllocation.js';
@@ -10,9 +9,8 @@ import { NETWORK_CHECKLIST, ROLES, centerChecklistFor } from '../models/roles.js
 import { bookingScope } from '../services/access.js';
 import { allocationSummary, availability, saveAllocation, suggestPlan } from '../services/allocation.js';
 import { notifyBooking } from '../services/notify.js';
-import { buildSeatPlan } from '../services/seatPlan.js';
 import { allowedActions, denyReason, readinessKinds } from '../services/workflow.js';
-import { parseCsv, toCsv } from '../utils/csv.js';
+import { toCsv } from '../utils/csv.js';
 import { HttpError } from '../utils/httpError.js';
 import { DATE_RE, TIME_RE, todayIso, toMinutes } from '../utils/time.js';
 
@@ -169,7 +167,6 @@ router.get('/:id', async (req, res) => {
   ]);
   const plain = booking.toObject({ flattenMaps: true });
   const summary = await allocationSummary(booking);
-  const candidates = await Candidate.countDocuments({ booking: booking._id });
   const mockAllocations = booking.mock
     ? await LabAllocation.find({ booking: booking._id, shiftId: booking.mock._id }).populate('lab', 'name code type floor').populate('allocatedBy', 'name').lean()
     : [];
@@ -177,7 +174,6 @@ router.get('/:id', async (req, res) => {
     booking: plain,
     allocation: summary,
     mockAllocations,
-    candidates,
     actions: allowedActions(req.user, { ...plain, center: booking.center._id, institute: booking.institute._id, agency: booking.agency?._id || null }, { center, hasAllocations: summary.totalSeats > 0 }),
     checklists: { network: NETWORK_CHECKLIST, center: centerChecklistFor(booking.mode) },
   });
@@ -189,8 +185,6 @@ router.put('/:id', async (req, res) => {
   assertAllowed('edit', req.user, booking, { center, hasAllocations });
   const body = bookingSchema.omit({ institute: true }).parse({ ...req.body, center: req.body.center || String(booking.center), mode: req.body.mode || booking.mode });
   const { center: newCenter } = await validateBookingInput({ ...body, institute: String(booking.institute) }, req.user);
-  const existingCandidates = await Candidate.countDocuments({ booking: booking._id });
-  if (existingCandidates) throw new HttpError(400, 'Remove uploaded candidates before changing shifts');
   Object.assign(booking, body, { billing: { ...booking.billing.toObject(), ...billingFor(newCenter, body.mode, body.shifts) } });
   booking.timeline.push(event(req.user, 'edited'));
   await booking.save();
@@ -510,86 +504,6 @@ router.post('/:id/feedback', async (req, res) => {
   booking.timeline.push(event(req.user, 'feedback', `${body.rating}/5`));
   await booking.save();
   res.json({ booking });
-});
-
-router.get('/:id/candidates', async (req, res) => {
-  const { booking } = await loadBooking(req);
-  const candidates = await Candidate.find({ booking: booking._id }).populate('lab', 'name code').sort({ rollNo: 1 }).lean();
-  res.json({ candidates });
-});
-
-router.post('/:id/candidates', async (req, res) => {
-  const { booking, center } = await loadBooking(req);
-  assertAllowed('candidates', req.user, booking, { center });
-  const { csv, replace } = z.object({ csv: z.string().min(1).max(2_000_000), replace: z.boolean().optional().default(false) }).parse(req.body);
-  const rows = parseCsv(csv);
-  const header = rows.shift()?.map((h) => h.toLowerCase().replace(/[^a-z]/g, '')) || [];
-  const col = (names) => header.findIndex((h) => names.includes(h));
-  const idx = { roll: col(['rollno', 'roll', 'rollnumber', 'applicationno']), name: col(['name', 'candidatename', 'fullname']), email: col(['email', 'emailid']), phone: col(['phone', 'mobile', 'mobileno']), shift: col(['shift', 'shiftno', 'slot']) };
-  if (idx.roll < 0 || idx.name < 0) throw new HttpError(400, 'CSV needs rollNo and name columns (optional: email, phone, shift)');
-  const errors = [];
-  const docs = [];
-  const seen = new Set();
-  rows.forEach((r, i) => {
-    const line = i + 2;
-    const rollNo = r[idx.roll];
-    const name = r[idx.name];
-    if (!rollNo || !name) return errors.push(`Line ${line}: rollNo and name are required`);
-    if (seen.has(rollNo)) return errors.push(`Line ${line}: duplicate roll number ${rollNo}`);
-    seen.add(rollNo);
-    const raw = idx.shift >= 0 ? r[idx.shift] : '';
-    let shift = booking.shifts.length === 1 && !raw ? booking.shifts[0] : null;
-    if (raw) shift = booking.shifts.find((s, n) => String(n + 1) === raw || s.label.toLowerCase() === raw.toLowerCase()) || null;
-    if (!shift) return errors.push(`Line ${line}: shift "${raw}" not found (use the shift number 1-${booking.shifts.length} or its label)`);
-    docs.push({ booking: booking._id, shiftId: shift._id, rollNo, name, email: idx.email >= 0 ? r[idx.email] : '', phone: idx.phone >= 0 ? r[idx.phone] : '' });
-  });
-  if (errors.length) throw new HttpError(400, `${errors.length} row(s) have problems`, errors.slice(0, 50));
-  if (!docs.length) throw new HttpError(400, 'No candidate rows found');
-
-  const existing = replace ? [] : await Candidate.find({ booking: booking._id }).select('rollNo shiftId').lean();
-  const finalByRoll = new Map(existing.map((c) => [c.rollNo, String(c.shiftId)]));
-  for (const d of docs) finalByRoll.set(d.rollNo, String(d.shiftId));
-  for (const s of booking.shifts) {
-    const n = [...finalByRoll.values()].filter((id) => id === String(s._id)).length;
-    if (n > s.candidates) throw new HttpError(400, `Shift ${s.label || s.date} would have ${n} candidates but only ${s.candidates} were booked`);
-  }
-  if (replace) await Candidate.deleteMany({ booking: booking._id });
-  const previousShift = new Map(existing.map((c) => [c.rollNo, String(c.shiftId)]));
-  await Candidate.bulkWrite(
-    docs.map((d) => {
-      const keepSeat = previousShift.get(d.rollNo) === String(d.shiftId);
-      return { updateOne: { filter: { booking: d.booking, rollNo: d.rollNo }, update: { $set: keepSeat ? d : { ...d, lab: null, seatNo: '' } }, upsert: true } };
-    }),
-  );
-  booking.timeline.push(event(req.user, 'candidates_uploaded', `${docs.length} candidate(s)${replace ? ' (replaced list)' : ''}`));
-  await booking.save();
-  res.status(201).json({ imported: docs.length, total: await Candidate.countDocuments({ booking: booking._id }) });
-});
-
-router.post('/:id/seat-plan', async (req, res) => {
-  const { booking, center } = await loadBooking(req);
-  assertAllowed('seatPlan', req.user, booking, { center });
-  const candidates = await Candidate.find({ booking: booking._id }).lean();
-  if (!candidates.length) throw new HttpError(400, 'Upload candidates first');
-  const allocations = await LabAllocation.find({ booking: booking._id }).populate('lab', 'code name').lean();
-  const { updates, unseated } = buildSeatPlan(candidates, allocations);
-  if (updates.length) await Candidate.bulkWrite(updates.map((u) => ({ updateOne: { filter: { _id: u._id }, update: { $set: { lab: u.lab, seatNo: u.seatNo } } } })));
-  booking.timeline.push(event(req.user, 'seat_plan', `${updates.length} seated${unseated.length ? `, ${unseated.length} without seat` : ''}`));
-  await booking.save();
-  res.json({ seated: updates.length, unseated });
-});
-
-router.get('/:id/candidates.csv', async (req, res) => {
-  const { booking } = await loadBooking(req);
-  const candidates = await Candidate.find({ booking: booking._id }).populate('lab', 'name code').sort({ rollNo: 1 }).lean();
-  const shiftById = new Map(booking.shifts.map((s, i) => [String(s._id), { ...s.toObject(), n: i + 1 }]));
-  const rows = candidates.map((c) => {
-    const s = shiftById.get(String(c.shiftId)) || {};
-    return [c.rollNo, c.name, c.email, c.phone, s.n, s.date, `${s.startTime}-${s.endTime}`, c.lab?.name || '', c.seatNo];
-  });
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${booking.bookingNo}-seat-plan.csv"`);
-  res.send(toCsv(['Roll No', 'Name', 'Email', 'Phone', 'Shift', 'Date', 'Time', 'Lab', 'Seat'], rows));
 });
 
 export default router;
