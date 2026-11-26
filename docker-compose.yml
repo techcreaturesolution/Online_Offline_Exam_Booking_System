@@ -1,0 +1,15 @@
+services:
+  mongo:
+    image: mongo:7
+    volumes: [mongo-data:/data/db]
+  app:
+    build: .
+    depends_on: [mongo]
+    ports: ['5000:5000']
+    environment:
+      MONGO_URI: mongodb://mongo:27017/thespot_exam_booking
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      CLIENT_ORIGIN: http://localhost:5000
+      PUBLIC_URL: http://localhost:5000
+volumes:
+  mongo-data:

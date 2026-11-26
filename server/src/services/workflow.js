@@ -85,8 +85,8 @@ export function denyReason(action, user, booking, ctx = {}) {
       if (!admin && !isAssignedAgency(user, booking) && !isCenterIncharge(user, booking)) return 'Only the assigned agency or Center In-Charge can start the exam';
       if (status !== 'ready') return 'All readiness checklists must be completed before the exam starts';
       if (!booking.agency) return 'Assign an exam conducting agency first';
-      if (today < dates[0]) return `The exam can be started only on its exam date (${dates[0]})`;
       if (today > dates[dates.length - 1]) return `The exam dates have passed (last date ${dates[dates.length - 1]})`;
+      if (!dates.includes(today)) return `The exam can be started only on its exam date (${dates.find((d) => d > today)})`;
       return null;
     case 'attendance':
       if (!admin && !isAssignedAgency(user, booking) && !isCenterIncharge(user, booking)) return 'Only the agency or Center In-Charge records attendance';

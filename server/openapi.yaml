@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: TheSpot Exam Booking API
+  version: 1.0.0
+  description: Online and offline exam booking, lab allocation, mock day, exam-day operations and utilization. All routes are also served under /api (unversioned alias).
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string } }
+    Shift:
+      type: object
+      required: [date, startTime, endTime, candidates]
+      properties:
+        label: { type: string }
+        date: { type: string, example: '2026-12-10' }
+        startTime: { type: string, example: '09:00' }
+        endTime: { type: string, example: '11:00' }
+        candidates: { type: integer, minimum: 1 }
+    AllocationItems:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { type: object, properties: { lab: { type: string }, seats: { type: integer } } }
+security: [{ bearer: [] }]
+paths:
+  /health: { get: { tags: [System], security: [], summary: Liveness probe, responses: { '200': { description: OK } } } }
+  /health/ready: { get: { tags: [System], security: [], summary: Readiness probe (MongoDB connected), responses: { '200': { description: Ready }, '503': { description: Not ready } } } }
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string }, password: { type: string } } } } } }
+      responses: { '200': { description: Token and user }, '401': { description: Invalid credentials } }
+  /auth/register-institute: { post: { tags: [Auth], security: [], summary: Institute self-registration (pending approval), responses: { '201': { description: Created } } } }
+  /auth/me: { get: { tags: [Auth], responses: { '200': { description: Current user } } } }
+  /auth/password: { put: { tags: [Auth], summary: Change password (returns a fresh token), responses: { '200': { description: OK } } } }
+  /meta: { get: { tags: [Meta], summary: Role labels and checklists, responses: { '200': { description: OK } } } }
+  /meta/agencies: { get: { tags: [Meta], responses: { '200': { description: Active agencies } } } }
+  /meta/institutes: { get: { tags: [Meta], responses: { '200': { description: Active institutes } } } }
+  /meta/directory: { get: { tags: [Meta], summary: User directory for the exam agency (excludes Super Admins), responses: { '200': { description: OK }, '403': { description: Not an agency } } } }
+  /centers: { get: { tags: [Centers], responses: { '200': { description: Centers in scope } } }, post: { tags: [Centers], responses: { '201': { description: Created } } } }
+  /centers/{id}: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], get: { tags: [Centers], responses: { '200': { description: Center with labs } } }, put: { tags: [Centers], responses: { '200': { description: Updated } } } }
+  /centers/{id}/availability: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], get: { tags: [Centers], summary: Free seats per lab for a date and time window, responses: { '200': { description: OK } } } }
+  /centers/{id}/schedule: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], get: { tags: [Centers], responses: { '200': { description: Allocations by date } } } }
+  /bookings:
+    get: { tags: [Bookings], parameters: [{ name: status, in: query, schema: { type: string } }, { name: mode, in: query, schema: { type: string } }], responses: { '200': { description: Bookings in scope } } }
+    post:
+      tags: [Bookings]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { center: { type: string }, examName: { type: string }, mode: { type: string, enum: [online, offline] }, agency: { type: string }, shifts: { type: array, items: { $ref: '#/components/schemas/Shift' } } } } } } }
+      responses: { '201': { description: Created }, '400': { description: Invalid, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } } }
+  /bookings/{id}: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], get: { tags: [Bookings], summary: Booking with allocation, mock allocations and allowed actions, responses: { '200': { description: OK } } }, put: { tags: [Bookings], responses: { '200': { description: Updated } } } }
+  /bookings/{id}/allocations/suggest: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: shiftId, in: query, required: true, schema: { type: string } }], get: { tags: [Allocation], responses: { '200': { description: Labs and suggested plan } } } }
+  /bookings/{id}/allocations/{shiftId}: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: shiftId, in: path, required: true, schema: { type: string } }], put: { tags: [Allocation], summary: Save shift allocation (serialised per center and date), requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/AllocationItems' } } } }, responses: { '200': { description: Saved }, '409': { description: Seats taken } } } }
+  /bookings/{id}/review: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Allocation], summary: Verify allocation (vendor online, institute offline), responses: { '200': { description: OK } } } }
+  /bookings/{id}/readiness/{kind}: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: kind, in: path, required: true, schema: { type: string, enum: [network, center] } }], put: { tags: [Exam day], responses: { '200': { description: OK } } } }
+  /bookings/{id}/mock: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], put: { tags: [Mock day], summary: Request or change a mock day (online, before exam date), responses: { '200': { description: OK } } }, delete: { tags: [Mock day], responses: { '200': { description: Cancelled } } } }
+  /bookings/{id}/mock/suggest: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], get: { tags: [Mock day], responses: { '200': { description: Labs and suggested plan } } } }
+  /bookings/{id}/mock/allocation: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], put: { tags: [Mock day], requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/AllocationItems' } } } }, responses: { '200': { description: Saved } } } }
+  /bookings/{id}/mock/permission: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Mock day], summary: Booking Vendor grants or rejects lab permission, responses: { '200': { description: OK } } } }
+  /bookings/{id}/mock/result: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Mock day], responses: { '200': { description: OK } } } }
+  /bookings/{id}/start: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Exam day], summary: Start exam (exam date only), responses: { '200': { description: OK }, '403': { description: Not allowed } } } }
+  /bookings/{id}/shifts/{shiftId}/attendance: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: shiftId, in: path, required: true, schema: { type: string } }], put: { tags: [Exam day], summary: Shift or lab-wise attendance on the exam date, responses: { '200': { description: OK } } } }
+  /bookings/{id}/incidents: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Exam day], responses: { '201': { description: Created } } } }
+  /bookings/{id}/complete: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Exam day], responses: { '200': { description: OK } } } }
+  /bookings/{id}/cancel: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Bookings], responses: { '200': { description: OK } } } }
+  /bookings/{id}/candidates: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Candidates], summary: CSV upload, responses: { '200': { description: OK } } } }
+  /bookings/{id}/seat-plan: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], post: { tags: [Candidates], responses: { '200': { description: OK } } } }
+  /reports/dashboard: { get: { tags: [Reports], responses: { '200': { description: Role dashboard } } } }
+  /reports/utilization: { get: { tags: [Reports], parameters: [{ name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }], responses: { '200': { description: OK } } } }
+  /reports/utilization.csv: { get: { tags: [Reports], responses: { '200': { description: CSV } } } }
+  /reports/planning: { get: { tags: [Reports], summary: Lab planning with seat ranges (exams and mock days), responses: { '200': { description: OK } } } }
+  /notifications: { get: { tags: [Notifications], responses: { '200': { description: OK } } } }
