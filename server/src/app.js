@@ -26,16 +26,23 @@ const openapiDoc = YAML.parse(openapiText);
 export function createApp() {
   const app = express();
   app.set('trust proxy', env.trustProxy);
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+  const allowedOrigins = new Set([
+    ...env.clientOrigins,
+    'https://onlineofflineexambookingsystem.netlify.app',
+    'http://localhost:5173',
+  ]);
   app.use(
     cors({
       origin(origin, cb) {
         if (!origin) return cb(null, true);
         const clean = origin.replace(/\/+$/, '');
-        if (env.clientOrigins.includes('*') || env.clientOrigins.includes(clean)) return cb(null, true);
+        if (allowedOrigins.has('*') || allowedOrigins.has(clean)) return cb(null, true);
         return cb(null, false);
       },
       credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
     }),
   );
   app.use(express.json({ limit: '3mb' }));
