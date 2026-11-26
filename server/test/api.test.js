@@ -113,6 +113,7 @@ test('online exam: institute books, network admin allocates, vendor verifies, ce
     left -= present;
     return { allocation: a._id, present };
   });
+  if (labs.length > 1) assert.equal((await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { present: 140, absent: 10 })).status, 400);
   const labWise = await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { labs });
   assert.equal(labWise.status, 200, JSON.stringify(labWise.data));
   assert.equal(labWise.data.booking.shifts[0].attendance.present, 140);
@@ -153,7 +154,7 @@ test('lab conflicts: a second booking cannot take seats already allocated in an 
   assert.equal((await api('network', 'PUT', `/bookings/${b.id}/allocations/${b.shiftId}`, { items: [{ lab: lab1._id, seats: 140 }] })).status, 200, 'cancel releases seats');
 });
 
-test('offline exam: center in-charge allocates halls and the institute verifies; candidates get a seat plan', async (t) => {
+test('offline exam: center in-charge allocates halls and the institute verifies', async (t) => {
   if (skip) return t.skip('MongoDB not reachable');
   const vad = await centerByCode('VAD01');
   const date = addDays(todayIso(), 15);
@@ -162,19 +163,11 @@ test('offline exam: center in-charge allocates halls and the institute verifies;
   const id = r.data.booking._id;
   const shiftId = r.data.booking.shifts[0]._id;
   assert.equal((await api('network', 'GET', `/bookings/${id}`)).status, 404, 'network admin does not see offline bookings');
-  const up = await api('university', 'POST', `/bookings/${id}/candidates`, { csv: 'Roll No,Name,Email\n103,C Three,c@x.in\n101,A One,a@x.in\n102,B Two,b@x.in\n' });
-  assert.equal(up.status, 201, JSON.stringify(up.data));
-  const tooMany = await api('university', 'POST', `/bookings/${id}/candidates`, { csv: 'rollNo,name\n104,D Four\n' });
-  assert.equal(tooMany.status, 400);
   const sug = await api('center2', 'GET', `/bookings/${id}/allocations/suggest?shiftId=${shiftId}`);
   assert.equal(sug.data.labs.every((l) => l.mode === 'offline'), true);
   assert.equal((await api('center2', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: sug.data.items })).data.status, 'allocated');
   assert.equal((await api('vendor', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).status, 403);
   assert.equal((await api('university', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).data.booking.status, 'confirmed');
-  const plan = await api('university', 'POST', `/bookings/${id}/seat-plan`);
-  assert.equal(plan.data.seated, 3);
-  const { data: csv } = await api('center2', 'GET', `/bookings/${id}/candidates.csv`);
-  assert.match(csv, /101,A One,a@x.in,,1,.*-001/);
 });
 
 test('reports: dashboard counts and utilization are scoped by role', async (t) => {
@@ -290,4 +283,15 @@ test('the exam agency sees a user directory without super admins', async (t) => 
   assert.equal(r.data.users.some((u) => u.role === 'super_admin'), false);
   assert.ok(r.data.users.some((u) => u.role === 'network_admin'));
   assert.equal((await api('institute', 'GET', '/meta/directory')).status, 403);
+});
+
+test('attendance counts roll up classrooms by block and center', async (t) => {
+  if (skip) return t.skip('MongoDB not reachable');
+  const r = await api('admin', 'GET', `/reports/attendance?date=${todayIso()}`);
+  assert.equal(r.status, 200);
+  for (const c of r.data.centers) {
+    assert.equal(c.total.allocated, c.blocks.reduce((n, b) => n + b.allocated, 0));
+    assert.equal(c.total.present, c.classrooms.reduce((n, x) => n + (x.present || 0), 0));
+  }
+  assert.equal((await api('university', 'GET', `/bookings/${r.data.centers[0]?.classrooms?.[0]?.lab || '000000000000000000000000'}/candidates`)).status, 404);
 });

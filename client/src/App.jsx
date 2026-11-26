@@ -11,10 +11,10 @@ import Dashboard from './pages/Dashboard.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import NewBooking from './pages/NewBooking.jsx';
+import Attendance from './pages/Attendance.jsx';
 import Planning from './pages/Planning.jsx';
 import Directory from './pages/Directory.jsx';
 import Register from './pages/Register.jsx';
-import SeatPlan from './pages/SeatPlan.jsx';
 import Utilization from './pages/Utilization.jsx';
 
 function Private({ children, roles }) {
@@ -32,7 +32,6 @@ export default function App() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/bookings/:id/seat-plan" element={<Private><SeatPlan /></Private>} />
       <Route element={<Private><Layout /></Private>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/bookings" element={<Bookings />} />
@@ -41,6 +40,7 @@ export default function App() {
         <Route path="/centers" element={<Centers />} />
         <Route path="/centers/:id" element={<CenterDetail />} />
         <Route path="/planning" element={<Planning />} />
+        <Route path="/attendance" element={<Attendance />} />
         <Route path="/utilization" element={<Utilization />} />
         <Route path="/directory" element={<Private roles={['exam_agency', 'super_admin']}><Directory /></Private>} />
         <Route path="/admin" element={<Private roles={['super_admin']}><Admin /></Private>} />

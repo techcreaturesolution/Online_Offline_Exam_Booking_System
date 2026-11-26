@@ -5,7 +5,7 @@ import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { LAB_TYPES, fmtDate, todayIso } from '../lib/format.js';
 
-const blankLab = { name: '', code: '', type: 'computer_lab', floor: '', capacity: 30, systemsTotal: 30, systemsWorking: 30, bufferSeats: 2, bandwidthMbps: 100, status: 'active', notes: '' };
+const blankLab = { name: '', code: '', type: 'computer_lab', block: '', floor: '', capacity: 30, systemsTotal: 30, systemsWorking: 30, bufferSeats: 2, bandwidthMbps: 100, status: 'active', notes: '' };
 
 function canManageType(user, center, type) {
   if (user.role === 'super_admin') return true;
@@ -23,7 +23,7 @@ function LabForm({ center, lab, types, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    const body = { name: f.name, code: f.code, type: f.type, floor: f.floor, capacity: f.capacity, systemsTotal: isPc ? f.systemsTotal : 0, systemsWorking: isPc ? f.systemsWorking : 0, bufferSeats: f.bufferSeats, bandwidthMbps: isPc ? f.bandwidthMbps : 0, status: f.status, notes: f.notes };
+    const body = { name: f.name, code: f.code, type: f.type, block: f.block, floor: f.floor, capacity: f.capacity, systemsTotal: isPc ? f.systemsTotal : 0, systemsWorking: isPc ? f.systemsWorking : 0, bufferSeats: f.bufferSeats, bandwidthMbps: isPc ? f.bandwidthMbps : 0, status: f.status, notes: f.notes };
     try {
       if (lab) await api.put(`/labs/${lab._id}`, body);
       else await api.post(`/centers/${center._id}/labs`, body);
@@ -38,6 +38,7 @@ function LabForm({ center, lab, types, onDone }) {
       <div><label className="label">Code</label><input className="input" value={f.code} onChange={set('code')} required /></div>
       <div className="md:col-span-2"><label className="label">Name</label><input className="input" value={f.name} onChange={set('name')} required /></div>
       <div><label className="label">Type</label><select className="input" value={f.type} onChange={set('type')}>{types.map((t) => <option key={t} value={t}>{LAB_TYPES[t]}</option>)}</select></div>
+      <div><label className="label">Block</label><input className="input" placeholder="e.g. Block A" value={f.block} onChange={set('block')} /></div>
       <div><label className="label">Floor</label><input className="input" value={f.floor} onChange={set('floor')} /></div>
       <div><label className="label">Status</label><select className="input" value={f.status} onChange={set('status')}>{['active', 'maintenance', 'inactive'].map((s) => <option key={s}>{s}</option>)}</select></div>
       <div><label className="label">Seating capacity</label><input type="number" min={1} className="input" value={f.capacity} onChange={set('capacity', true)} /></div>
@@ -162,7 +163,7 @@ export default function CenterDetail() {
                 {editing === l._id ? <LabForm center={center} lab={l} types={types.includes(l.type) ? types : [l.type]} onDone={done} /> : (
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <div className="font-semibold">{l.code} · {l.name} <span className="ml-1 text-xs font-normal text-slate-500">{LAB_TYPES[l.type]}{l.floor ? ` · ${l.floor}` : ''}</span></div>
+                      <div className="font-semibold">{l.code} · {l.name} <span className="ml-1 text-xs font-normal text-slate-500">{LAB_TYPES[l.type]}{l.block ? ` · ${l.block}` : ''}{l.floor ? ` · ${l.floor}` : ''}</span></div>
                       <div className="text-sm text-slate-600">
                         Capacity {l.capacity}
                         {l.type === 'computer_lab' && ` · ${l.systemsWorking}/${l.systemsTotal} systems working · ${l.bandwidthMbps} Mbps`}

@@ -14,3 +14,4 @@ Simplest-option choices made where the SRS is open (SRS section 12).
    - Hosting and custom domains are handled by the product owner; the app stays host-neutral (Docker + env variables, tenant resolution configurable).
    - Razorpay test keys will be provided for Phase 2; until then a mock gateway adapter is used in tests.
    - Plan names, prices and limits: still open; placeholder Free / Starter / Growth / Enterprise will be used.
+7. **Counts only, no candidate details** (product owner, 26 Nov 2026): candidate CSV upload, name list, seat plan and seat-number printouts are removed (supersedes SRS BL-05). Bookings carry only the total candidates per shift; on exam day the agency records present per classroom; absent = allocated − present, rolled up per Lab `block` and per center (`GET /reports/attendance`).

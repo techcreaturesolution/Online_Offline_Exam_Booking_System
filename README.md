@@ -7,7 +7,7 @@ MERN platform (MongoDB, Express, React, Node) where universities and institutes 
 | Role | What they do |
 | --- | --- |
 | Super Admin | Manages centers, labs, organizations and users; approves institute sign-ups; sees everything |
-| University / Institute | Requests bookings, uploads candidates, verifies **offline** hall allocation, tracks status/counts/utilization, rates the center |
+| University / Institute | Requests bookings with candidate counts, verifies **offline** hall allocation, tracks status/counts/utilization, rates the center |
 | Booking Vendor | Owns centers commercially; **verifies the Network Admin's lab allocation** for online exams, assigns agency, manages billing |
 | Network Admin | **Allocates computer labs** for online exams, manages computer labs, completes the network checklist |
 | Center In-Charge | **Allocates exam halls/classrooms** for offline exams, manages halls, completes the center checklist, records attendance |
@@ -31,7 +31,7 @@ Statuses: `requested → allocated → confirmed → ready → in_progress → c
 - Lab utilization report: usable seat-hours vs allocated vs attended, per lab / center / day, with CSV export
 - Role dashboards: action-needed queue, status counts, candidates, attendance %, upcoming shifts, utilization charts
 - Readiness checklists (network for online; center + strong room/answer sheets for offline)
-- Candidate CSV upload, automatic seat plan, printable seat list and CSV
+- Candidate counts only: total candidates per shift at booking; on exam day present / absent per classroom, rolled up per block (Lab **Block** field) and per center (booking page and **Attendance counts** page, `GET /api/reports/attendance?date=`)
 - Exam start and attendance only on the exam date; lab-wise attendance recorded by the exam agency
 - Mock day for online exams: institute or agency requests a date before the exam, the Network Admin allocates labs, the Booking Vendor grants lab permission, and the agency records the mock result
 - Lab planning view with seat ranges per lab for exam shifts and mock days; overlapping exams in one lab get separate seat numbers
@@ -69,7 +69,7 @@ npm run build
 ## Structure
 
 ```
-server/  Express API: src/models, src/routes, src/services (workflow, allocation, utilization, seat plan, notify), scripts/seed-demo.js, test/
+server/  Express API: src/models, src/routes, src/services (workflow, allocation, counts, utilization, notify), scripts/seed-demo.js, test/
 client/  React + Vite + Tailwind: src/pages, src/components, src/lib
 ```
 
