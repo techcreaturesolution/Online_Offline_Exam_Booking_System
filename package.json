@@ -1,0 +1,16 @@
+{
+  "name": "thespot-exam-booking",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TheSpot Exam Booking: online and offline exam center, lab allocation and utilization platform (MERN)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed:demo",
+    "lint": "npm --prefix server run lint && npm --prefix client run lint",
+    "test": "npm --prefix server test",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start"
+  }
+}
