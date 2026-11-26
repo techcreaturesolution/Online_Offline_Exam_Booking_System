@@ -3,7 +3,10 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
-import { requireAuth, signToken } from '../middleware/auth.js';
+import { requestedTenantSlug, requireAuth, signToken } from '../middleware/auth.js';
+import { Tenant } from '../models/Tenant.js';
+import { audit } from '../services/audit.js';
+import { asPlatform, withTenant } from '../tenancy/context.js';
 import { Organization } from '../models/Organization.js';
 import { ROLES } from '../models/roles.js';
 import { User } from '../models/User.js';
@@ -18,16 +21,59 @@ async function profile(userId) {
   return User.findById(userId).populate('organization', 'name kind type code').populate('centers', 'name code city modes').lean();
 }
 
+const MAX_FAILED = 5;
+const LOCK_MS = 15 * 60 * 1000;
+
 router.post('/login', limiter, async (req, res) => {
   const { email, password } = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
-  const user = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) throw new HttpError(401, 'Invalid email or password');
+  const user = await asPlatform(() => User.findOne({ email: email.toLowerCase() }).select('+passwordHash +failedLogins +lockedUntil'));
+  if (user?.lockedUntil && user.lockedUntil > new Date()) throw new HttpError(429, 'Too many failed attempts. Try again in 15 minutes.');
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (user) {
+      user.failedLogins = (user.failedLogins || 0) + 1;
+      if (user.failedLogins >= MAX_FAILED) Object.assign(user, { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MS) });
+      await asPlatform(() => user.save());
+    }
+    throw new HttpError(401, 'Invalid email or password');
+  }
   if (user.status === 'pending') throw new HttpError(403, 'Your account is waiting for Super Admin approval');
   if (user.status !== 'active') throw new HttpError(403, 'Your account is disabled');
-  user.lastLoginAt = new Date();
-  await user.save();
-  const { passwordHash: _p, ...safe } = await profile(user._id);
-  res.json({ token: signToken(user), user: safe });
+  const tenant = user.tenant ? await asPlatform(() => Tenant.findById(user.tenant).lean()) : null;
+  if (tenant && ['suspended', 'cancelled'].includes(tenant.status)) throw new HttpError(403, `Your organisation account is ${tenant.status}. Contact support.`);
+  const slug = requestedTenantSlug(req);
+  if (tenant && slug && slug !== tenant.slug) throw new HttpError(401, 'Invalid email or password');
+  Object.assign(user, { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null });
+  await asPlatform(() => user.save());
+  const { passwordHash: _p, failedLogins: _f, lockedUntil: _l, ...safe } = await asPlatform(() => profile(user._id));
+  res.json({ token: signToken(user), user: safe, tenant: tenant && { _id: tenant._id, name: tenant.name, slug: tenant.slug, status: tenant.status, branding: tenant.branding } });
+});
+
+const tenantSignupSchema = z.object({
+  organisation: z.object({
+    name: z.string().trim().min(3).max(120),
+    slug: z.string().trim().toLowerCase().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, 'Use 3-40 lowercase letters, numbers or dashes'),
+    types: z.array(z.enum(['vendor', 'institute', 'agency'])).min(1),
+  }),
+  name: z.string().trim().min(2),
+  email: z.string().email(),
+  phone: z.string().trim().max(20).optional().default(''),
+  password: z.string().min(8).max(100),
+});
+
+router.post('/signup-tenant', limiter, async (req, res) => {
+  if (!env.allowTenantSignup) throw new HttpError(403, 'Organisation sign-up is disabled');
+  const body = tenantSignupSchema.parse(req.body);
+  const result = await asPlatform(async () => {
+    if (await Tenant.exists({ slug: body.organisation.slug })) throw new HttpError(409, 'This organisation address is taken');
+    if (await User.exists({ email: body.email.toLowerCase() })) throw new HttpError(409, 'An account with this email already exists');
+    return Tenant.create({ ...body.organisation, contactEmail: body.email, status: 'trial', plan: 'trial', trialEndsAt: new Date(Date.now() + env.trialDays * 86400000) });
+  });
+  const user = await withTenant(result._id, async () => {
+    const u = await User.create({ name: body.name, email: body.email, phone: body.phone, passwordHash: await bcrypt.hash(body.password, 10), role: ROLES.SUPER_ADMIN });
+    await audit({ user: u, ip: req.ip }, 'tenant.signup', 'Tenant', result._id, null, { name: result.name, slug: result.slug, types: result.types });
+    return u;
+  });
+  res.status(201).json({ token: signToken(user), tenant: { _id: result._id, name: result.name, slug: result.slug, status: result.status, trialEndsAt: result.trialEndsAt } });
 });
 
 const signupSchema = z.object({
@@ -46,7 +92,11 @@ const signupSchema = z.object({
 router.post('/register-institute', limiter, async (req, res) => {
   if (!env.allowInstituteSignup) throw new HttpError(403, 'Self sign-up is disabled. Contact the Super Admin.');
   const body = signupSchema.parse(req.body);
-  if (await User.exists({ email: body.email.toLowerCase() })) throw new HttpError(409, 'An account with this email already exists');
+  const slug = requestedTenantSlug(req) || env.defaultTenantSlug;
+  const tenant = await asPlatform(() => Tenant.findOne({ slug, status: { $in: ['trial', 'active'] } }).lean());
+  if (!tenant) throw new HttpError(404, 'Organisation not found');
+  if (await asPlatform(() => User.exists({ email: body.email.toLowerCase() }))) throw new HttpError(409, 'An account with this email already exists');
+  await withTenant(tenant._id, async () => {
   const org = await Organization.create({ kind: 'institute', ...body.institute, email: body.email, phone: body.phone, active: false });
   await User.create({
     name: body.name,
@@ -57,12 +107,14 @@ router.post('/register-institute', limiter, async (req, res) => {
     organization: org._id,
     status: 'pending',
   });
+  });
   res.status(201).json({ ok: true, message: 'Registration received. The Super Admin will approve your institute shortly.' });
 });
 
 router.get('/me', requireAuth, async (req, res) => {
   const { passwordHash: _p, ...safe } = await profile(req.user._id);
-  res.json({ user: safe });
+  const t = req.tenant;
+  res.json({ user: safe, tenant: t && { _id: t._id, name: t.name, slug: t.slug, status: t.status, plan: t.plan, trialEndsAt: t.trialEndsAt, branding: t.branding }, impersonatedBy: req.impersonatedBy });
 });
 
 router.put('/me/password', requireAuth, async (req, res) => {
@@ -72,6 +124,7 @@ router.put('/me/password', requireAuth, async (req, res) => {
   user.passwordHash = await bcrypt.hash(newPassword, 10);
   user.passwordChangedAt = new Date();
   await user.save();
+  await audit(req, 'user.password_changed', 'User', user._id);
   res.json({ ok: true, token: signToken(user) });
 });
 

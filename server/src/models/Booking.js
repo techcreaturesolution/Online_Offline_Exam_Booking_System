@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 import { BOOKING_STATUSES } from './roles.js';
 
 const shiftSchema = new mongoose.Schema({
@@ -77,7 +78,7 @@ const mockSchema = new mongoose.Schema({
 
 const bookingSchema = new mongoose.Schema(
   {
-    bookingNo: { type: String, required: true, unique: true },
+    bookingNo: { type: String, required: true },
     institute: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     center: { type: mongoose.Schema.Types.ObjectId, ref: 'Center', required: true, index: true },
     agency: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null, index: true },
@@ -119,5 +120,8 @@ const bookingSchema = new mongoose.Schema(
 );
 
 bookingSchema.index({ 'shifts.date': 1 });
+bookingSchema.index({ tenant: 1, bookingNo: 1 }, { unique: true });
+
+bookingSchema.plugin(tenantScoped, {});
 
 export const Booking = mongoose.model('Booking', bookingSchema);

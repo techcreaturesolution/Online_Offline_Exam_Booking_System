@@ -5,13 +5,19 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [tenant, setTenant] = useState(null);
+  const [impersonatedBy, setImpersonatedBy] = useState(null);
   const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('eb_token')));
 
   useEffect(() => {
     if (!localStorage.getItem('eb_token')) return;
     api
       .get('/auth/me')
-      .then((r) => setUser(r.data.user))
+      .then((r) => {
+        setUser(r.data.user);
+        setTenant(r.data.tenant || null);
+        setImpersonatedBy(r.data.impersonatedBy || null);
+      })
       .catch(() => localStorage.removeItem('eb_token'))
       .finally(() => setLoading(false));
   }, []);
@@ -20,15 +26,19 @@ export function AuthProvider({ children }) {
     const r = await api.post('/auth/login', { email, password });
     localStorage.setItem('eb_token', r.data.token);
     setUser(r.data.user);
+    setTenant(r.data.tenant || null);
     return r.data.user;
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('eb_token');
+    sessionStorage.removeItem('eb_owner_token');
     setUser(null);
+    setTenant(null);
+    setImpersonatedBy(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const value = useMemo(() => ({ user, tenant, impersonatedBy, loading, login, logout }), [user, tenant, impersonatedBy, loading, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

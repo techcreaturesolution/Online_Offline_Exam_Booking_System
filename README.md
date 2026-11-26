@@ -6,7 +6,8 @@ MERN platform (MongoDB, Express, React, Node) where universities and institutes 
 
 | Role | What they do |
 | --- | --- |
-| Super Admin | Manages centers, labs, organizations and users; approves institute sign-ups; sees everything |
+| Platform Owner | Runs the SaaS: lists every organisation (tenant) with usage, changes plan, suspends/reactivates, opens an audited 30-minute support session as the tenant's admin |
+| Super Admin | Tenant admin: manages centers, labs, organizations and users of its own organisation; approves institute sign-ups; edits branding/settings, exports data, reads the audit log |
 | University / Institute | Requests bookings with candidate counts, verifies **offline** hall allocation, tracks status/counts/utilization, rates the center |
 | Booking Vendor | Owns centers commercially; **verifies the Network Admin's lab allocation** for online exams, assigns agency, manages billing |
 | Network Admin | **Allocates computer labs** for online exams, manages computer labs, completes the network checklist |
@@ -54,7 +55,14 @@ npm run dev:server                # API on http://localhost:5000
 npm run dev:client                # web on http://localhost:5173 (proxies /api)
 ```
 
-Demo logins (password `Demo@1234`): `admin@`, `university@`, `institute@`, `vendor@`, `network@`, `center@`, `center2@`, `agency@`, `agency2@` – all `@examhub.test`.
+Demo logins (password `Demo@1234`): `admin@`, `university@`, `institute@`, `vendor@`, `network@`, `center@`, `center2@`, `agency@`, `agency2@` – all `@examhub.test`, in tenant `default`. A second tenant `acme` has `admin@acme.test`, and `owner@examhub.test` is the Platform Owner.
+
+### Multi-tenancy
+
+- Every organisation is a tenant; its users only ever see their own centers, labs, bookings, users, reports and audit log. Queries without a tenant context fail (see `docs/DECISIONS.md` #8).
+- New organisations start a trial at `/signup` (`POST /api/auth/signup-tenant`); the person signing up becomes its Super Admin.
+- Tenant admins manage branding, settings, JSON export, account closure (30-day grace) and the audit log at **Organisation & audit log**.
+- Upgrading an existing single-tenant database: `npm --prefix server run migrate:tenant -- --slug default --name "Your Org"` (idempotent; `--down` removes tenant fields again).
 
 Production: `npm run build` creates `client/dist`; serve it from any static host with `/api` proxied to `npm start`, or set `VITE_API_URL` at build time and `CLIENT_ORIGIN` on the API.
 

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 
 const organizationSchema = new mongoose.Schema(
   {
@@ -15,6 +16,8 @@ const organizationSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-organizationSchema.index({ kind: 1, code: 1 }, { unique: true, partialFilterExpression: { code: { $type: 'string' } } });
+organizationSchema.index({ tenant: 1, kind: 1, code: 1 }, { unique: true, partialFilterExpression: { code: { $type: 'string' } } });
+
+organizationSchema.plugin(tenantScoped, {});
 
 export const Organization = mongoose.model('Organization', organizationSchema);

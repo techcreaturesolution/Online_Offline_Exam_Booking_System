@@ -15,7 +15,7 @@ function navFor(role) {
   items.push({ to: '/attendance', label: 'Attendance counts' });
   items.push({ to: '/utilization', label: 'Lab utilization' });
   if (role === 'exam_agency') items.push({ to: '/directory', label: 'User directory' });
-  if (role === 'super_admin') items.push({ to: '/admin', label: 'Users & organizations' });
+  if (role === 'super_admin') items.push({ to: '/admin', label: 'Users & organizations' }, { to: '/organisation', label: 'Organisation & audit log' });
   return items;
 }
 
@@ -71,7 +71,13 @@ function Notifications() {
 }
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, tenant, impersonatedBy, logout } = useAuth();
+  const owner = user.role === 'platform_owner';
+  const exitSupport = () => {
+    localStorage.setItem('eb_token', sessionStorage.getItem('eb_owner_token') || '');
+    sessionStorage.removeItem('eb_owner_token');
+    window.location.href = '/platform';
+  };
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
   const org = user.organization?.name || (user.centers || []).map((c) => c.name).join(', ');
@@ -83,7 +89,7 @@ export default function Layout() {
           <button className="md:hidden" onClick={() => setMenu((m) => !m)} aria-label="Menu">☰</button>
         </div>
         <nav className="space-y-1 px-3 pb-6">
-          {navFor(user.role).map((i) => (
+          {(owner ? [{ to: '/platform', label: 'Tenants' }] : navFor(user.role)).map((i) => (
             <NavLink key={i.to} to={i.to} end onClick={() => setMenu(false)} className={({ isActive }) => `block rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-white/15 font-semibold text-white' : 'text-slate-300 hover:bg-white/10'}`}>
               {i.label}
             </NavLink>
@@ -97,13 +103,21 @@ export default function Layout() {
             <div className="text-xs text-slate-500">
               {ROLE_LABELS[user.role]}
               {org ? ` · ${org}` : ''}
+              {tenant ? ` · ${tenant.name}` : ''}
+              {tenant?.status === 'trial' && tenant.trialEndsAt ? ` (trial until ${new Date(tenant.trialEndsAt).toLocaleDateString()})` : ''}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Notifications />
+            {!owner && <Notifications />}
             <button className="btn-secondary" onClick={() => { logout(); navigate('/login'); }}>Sign out</button>
           </div>
         </header>
+        {impersonatedBy && (
+          <div className="no-print flex items-center justify-between bg-amber-100 px-6 py-2 text-sm text-amber-900">
+            <span>Platform support session as {user.name}. Every action is recorded in this organisation's audit log.</span>
+            <button className="btn-secondary" onClick={exitSupport}>Exit support session</button>
+          </div>
+        )}
         <main className="mx-auto max-w-7xl p-4 md:p-6">
           <Outlet />
         </main>

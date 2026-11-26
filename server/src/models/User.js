@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 import { ROLE_LIST } from './roles.js';
 
 const userSchema = new mongoose.Schema(
@@ -13,6 +14,8 @@ const userSchema = new mongoose.Schema(
     centers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Center' }],
     lastLoginAt: Date,
     passwordChangedAt: Date,
+    failedLogins: { type: Number, default: 0, select: false },
+    lockedUntil: { type: Date, default: null, select: false },
   },
   { timestamps: true },
 );
@@ -21,5 +24,7 @@ userSchema.methods.toSafe = function toSafe() {
   const { passwordHash: _p, __v: _v, ...rest } = this.toObject();
   return rest;
 };
+
+userSchema.plugin(tenantScoped, { required: false });
 
 export const User = mongoose.model('User', userSchema);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -12,5 +13,7 @@ const notificationSchema = new mongoose.Schema(
 );
 
 notificationSchema.index({ user: 1, createdAt: -1 });
+
+notificationSchema.plugin(tenantScoped, {});
 
 export const Notification = mongoose.model('Notification', notificationSchema);

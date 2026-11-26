@@ -18,6 +18,10 @@ export const env = {
   clientOrigins: list(process.env.CLIENT_ORIGIN || 'http://localhost:5173'),
   publicUrl: process.env.PUBLIC_URL || 'http://localhost:5173',
   allowInstituteSignup: bool(process.env.ALLOW_INSTITUTE_SIGNUP, true),
+  allowTenantSignup: bool(process.env.ALLOW_TENANT_SIGNUP, true),
+  trialDays: Number(process.env.TRIAL_DAYS || 14),
+  tenantBaseDomain: (process.env.TENANT_BASE_DOMAIN || '').toLowerCase(),
+  defaultTenantSlug: (process.env.DEFAULT_TENANT_SLUG || 'default').toLowerCase(),
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 587),

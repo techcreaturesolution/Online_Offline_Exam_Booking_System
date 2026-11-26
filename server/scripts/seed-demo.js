@@ -9,13 +9,34 @@ import { LabAllocation } from '../src/models/LabAllocation.js';
 import { Notification } from '../src/models/Notification.js';
 import { Organization } from '../src/models/Organization.js';
 import { CENTER_CHECKLIST, NETWORK_CHECKLIST, OFFLINE_EXTRA_CHECKLIST, ROLES } from '../src/models/roles.js';
+import { AuditLog } from '../src/models/AuditLog.js';
+import { Tenant } from '../src/models/Tenant.js';
 import { User } from '../src/models/User.js';
+import { asPlatform, withTenant } from '../src/tenancy/context.js';
 import { addDays, todayIso } from '../src/utils/time.js';
 
 export const DEMO_PASSWORD = 'Demo@1234';
 
 export async function seedDemo() {
-  await Promise.all([Booking, Center, Counter, Lab, LabAllocation, Notification, Organization, User].map((m) => m.deleteMany({})));
+  return asPlatform(async () => {
+    await Promise.all([Booking, Center, Counter, Lab, LabAllocation, Notification, Organization, User, Tenant].map((m) => m.deleteMany({})));
+    await AuditLog.deleteMany({}, { purgeTenant: true });
+    const [main, acme] = await Tenant.create([
+      { name: 'TheSpot Exam Services', slug: 'default', types: ['vendor', 'institute', 'agency'], status: 'active', plan: 'growth', contactEmail: 'admin@examhub.test' },
+      { name: 'Acme Assessment Network', slug: 'acme', types: ['vendor'], status: 'trial', plan: 'trial', trialEndsAt: new Date(Date.now() + 14 * 86400000), contactEmail: 'admin@acme.test' },
+    ]);
+    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+    const { users } = await withTenant(main._id, () => seedDefaultTenant(main));
+    await withTenant(acme._id, async () => {
+      await User.create({ name: 'Acme Admin', email: 'admin@acme.test', passwordHash, role: ROLES.SUPER_ADMIN });
+      await Center.create({ name: 'Acme Pune Test Center', code: 'AHM01', address: 'Baner, Pune', city: 'Pune', state: 'Maharashtra', pincode: '411045', modes: ['online'], ratePerSeat: { online: 500, offline: 0 } });
+    });
+    const owner = await User.create({ name: 'Platform Owner', email: 'owner@examhub.test', passwordHash, role: ROLES.PLATFORM_OWNER });
+    return { users: [...users, { email: 'admin@acme.test', role: 'super_admin (acme)' }, { email: owner.email, role: owner.role }] };
+  });
+}
+
+async function seedDefaultTenant(tenant) {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
   const [gtu, sim, vendor, agency, agency2] = await Organization.create([
@@ -105,7 +126,7 @@ export async function seedDemo() {
   await booking({ institute: sim._id, center: srt._id, examName: 'Aptitude Test (Cancelled)', mode: 'online', status: 'cancelled', cancelReason: 'Exam postponed by institute', shifts: [
     { date: addDays(today, 9), startTime: '10:00', endTime: '11:00', candidates: 50 },
   ] });
-  await Counter.create({ _id: `booking-${year}`, seq });
+  await Counter.create({ _id: `${tenant._id}:booking-${year}`, seq });
 
   return { users: users.map((u) => ({ email: u.email, role: u.role })) };
 }

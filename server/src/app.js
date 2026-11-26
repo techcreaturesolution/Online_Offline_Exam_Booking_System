@@ -18,6 +18,9 @@ import bookingRoutes from './routes/bookings.js';
 import centerRoutes from './routes/centers.js';
 import metaRoutes from './routes/meta.js';
 import notificationRoutes from './routes/notifications.js';
+import platformRoutes from './routes/platform.js';
+import tenantRoutes from './routes/tenant.js';
+import rateLimit from 'express-rate-limit';
 import reportRoutes from './routes/reports.js';
 
 const openapiText = fs.readFileSync(new URL('../openapi.yaml', import.meta.url), 'utf8');
@@ -32,6 +35,7 @@ export function createApp() {
   if (env.nodeEnv !== 'test') app.use(morgan('dev'));
 
   const api = express.Router();
+  api.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: env.nodeEnv === 'test' ? 100000 : 3000, standardHeaders: true, legacyHeaders: false }));
   api.get('/health', (_req, res) => res.json({ ok: true }));
   api.get('/health/ready', (_req, res) => {
     const ready = mongoose.connection.readyState === 1;
@@ -40,6 +44,8 @@ export function createApp() {
   api.get('/openapi.yaml', (_req, res) => res.type('text/yaml').send(openapiText));
   api.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDoc));
   api.use('/auth', authRoutes);
+  api.use('/platform', requireAuth, requireRoles(ROLES.PLATFORM_OWNER), platformRoutes);
+  api.use('/tenant', requireAuth, requireRoles(ROLES.SUPER_ADMIN), tenantRoutes);
   api.use('/meta', requireAuth, metaRoutes);
   api.use('/admin', requireAuth, requireRoles(ROLES.SUPER_ADMIN), adminRoutes);
   api.use('/bookings', requireAuth, bookingRoutes);
