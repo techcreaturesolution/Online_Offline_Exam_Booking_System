@@ -1,8 +1,10 @@
 /**
  * Moves single-tenant data into a default tenant. Idempotent: documents that already
  * have a tenant are left alone. `--down` removes the tenant field again (dev only).
- *   node scripts/migrate-default-tenant.js [--slug default] [--name "My Org"] [--down]
+ *   node scripts/migrate-default-tenant.js [--slug default] [--name "My Org"] [--owner-email you@x.com] [--down]
+ * With --owner-email, a Platform Owner account is created (password from PLATFORM_OWNER_PASSWORD) if none exists.
  */
+import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { connectDb } from '../src/config/db.js';
 import { AuditLog } from '../src/models/AuditLog.js';
@@ -24,7 +26,7 @@ const arg = (name, fallback) => {
   return i > -1 ? process.argv[i + 1] : fallback;
 };
 
-export async function migrateDefaultTenant({ slug = 'default', name = 'Default Organisation' } = {}) {
+export async function migrateDefaultTenant({ slug = 'default', name = 'Default Organisation', ownerEmail, ownerPassword } = {}) {
   return asPlatform(async () => {
     const tenant = (await Tenant.findOne({ slug })) || (await Tenant.create({ name, slug, types: ['vendor', 'institute', 'agency'], status: 'active', plan: 'enterprise' }));
     const report = {};
@@ -46,7 +48,13 @@ export async function migrateDefaultTenant({ slug = 'default', name = 'Default O
       await Model.collection.dropIndex(index).catch(() => {});
     }
     await Promise.all(SCOPED.map((m) => m.syncIndexes()));
-    return { tenant: { _id: tenant._id, slug: tenant.slug }, migrated: report };
+    let owner = await User.findOne({ role: ROLES.PLATFORM_OWNER }).select('email').lean();
+    if (!owner && ownerEmail) {
+      if (!ownerPassword || ownerPassword.length < 8) throw new Error('Set PLATFORM_OWNER_PASSWORD (min 8 characters) to create the platform owner');
+      if (await User.exists({ email: ownerEmail.toLowerCase() })) throw new Error(`${ownerEmail} is already a tenant user; use another email for the platform owner`);
+      owner = await User.create({ name: 'Platform Owner', email: ownerEmail, passwordHash: await bcrypt.hash(ownerPassword, 10), role: ROLES.PLATFORM_OWNER });
+    }
+    return { tenant: { _id: tenant._id, slug: tenant.slug }, migrated: report, platformOwner: owner?.email || 'none (pass --owner-email to create one)' };
   });
 }
 
@@ -68,7 +76,7 @@ export async function rollbackDefaultTenant() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   await connectDb();
-  const result = process.argv.includes('--down') ? await rollbackDefaultTenant() : await migrateDefaultTenant({ slug: arg('slug', 'default'), name: arg('name', 'Default Organisation') });
+  const result = process.argv.includes('--down') ? await rollbackDefaultTenant() : await migrateDefaultTenant({ slug: arg('slug', 'default'), name: arg('name', 'Default Organisation'), ownerEmail: arg('owner-email'), ownerPassword: process.env.PLATFORM_OWNER_PASSWORD });
   console.log(JSON.stringify(result, null, 2));
   await mongoose.disconnect();
 }

@@ -62,7 +62,7 @@ Demo logins (password `Demo@1234`): `admin@`, `university@`, `institute@`, `vend
 - Every organisation is a tenant; its users only ever see their own centers, labs, bookings, users, reports and audit log. Queries without a tenant context fail (see `docs/DECISIONS.md` #8).
 - New organisations start a trial at `/signup` (`POST /api/auth/signup-tenant`); the person signing up becomes its Super Admin.
 - Tenant admins manage branding, settings, JSON export, account closure (30-day grace) and the audit log at **Organisation & audit log**.
-- Upgrading an existing single-tenant database: `npm --prefix server run migrate:tenant -- --slug default --name "Your Org"` (idempotent; `--down` removes tenant fields again).
+- Upgrading an existing single-tenant database: `PLATFORM_OWNER_PASSWORD=… npm --prefix server run migrate:tenant -- --slug default --name "Your Org" --owner-email owner@yourdomain` (idempotent; creates the Platform Owner if none exists; `--down` removes tenant fields again).
 
 Production: `npm run build` creates `client/dist`; serve it from any static host with `/api` proxied to `npm start`, or set `VITE_API_URL` at build time and `CLIENT_ORIGIN` on the API.
 
