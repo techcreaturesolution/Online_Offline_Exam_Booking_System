@@ -113,6 +113,7 @@ test('online exam: institute books, network admin allocates, vendor verifies, ce
     left -= present;
     return { allocation: a._id, present };
   });
+  if (labs.length > 1) assert.equal((await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { present: 140, absent: 10 })).status, 400);
   const labWise = await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { labs });
   assert.equal(labWise.status, 200, JSON.stringify(labWise.data));
   assert.equal(labWise.data.booking.shifts[0].attendance.present, 140);

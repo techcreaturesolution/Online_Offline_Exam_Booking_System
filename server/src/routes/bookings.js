@@ -416,6 +416,13 @@ router.put('/:id/shifts/:shiftId/attendance', async (req, res) => {
     present = fresh.reduce((n, a) => n + (a.present || 0), 0);
     absent = shift.candidates - present;
     if (absent < 0) throw new HttpError(400, `Present exceeds the ${shift.candidates} registered candidates`);
+  } else if (present != null) {
+    const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).select('seats').lean();
+    if (allocs.length > 1) throw new HttpError(400, 'This shift uses more than one classroom; record present per classroom');
+    if (allocs.length === 1) {
+      if (present > allocs[0].seats) throw new HttpError(400, `Only ${allocs[0].seats} seats are allocated`);
+      await LabAllocation.updateOne({ _id: allocs[0]._id }, { $set: { present } });
+    }
   }
   if (present == null || absent == null) throw new HttpError(400, 'Send present and absent counts or lab-wise attendance');
   if (present + absent !== shift.candidates) throw new HttpError(400, `Present + absent must equal the ${shift.candidates} registered candidates`);

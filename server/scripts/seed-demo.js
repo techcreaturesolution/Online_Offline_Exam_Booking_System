@@ -73,7 +73,10 @@ export async function seedDemo() {
     const b = await Booking.create({ bookingNo: `EB-${year}-${String(seq).padStart(5, '0')}`, billing: { ratePerSeat: rate, amount: rate * total }, createdBy: admin._id, timeline: [ev('requested')], ...data });
     for (const [shiftIndex, code, seats] of allocations) {
       const s = b.shifts[shiftIndex];
-      await LabAllocation.create({ booking: b._id, shiftId: s._id, center: b.center, lab: lab[code]._id, seats, date: s.date, startTime: s.startTime, endTime: s.endTime, allocatedBy: admin._id });
+      const left = s.attendance?.present == null ? null : s.attendance.present - (s.$seeded || 0);
+      const present = left == null ? null : Math.max(0, Math.min(seats, left));
+      if (present != null) s.$seeded = (s.$seeded || 0) + present;
+      await LabAllocation.create({ booking: b._id, shiftId: s._id, center: b.center, lab: lab[code]._id, seats, present, date: s.date, startTime: s.startTime, endTime: s.endTime, allocatedBy: admin._id });
     }
     return b;
   }
