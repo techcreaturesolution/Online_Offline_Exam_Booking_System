@@ -20,8 +20,9 @@ export default function SignupOrg() {
     setError('');
     try {
       const r = await api.post('/auth/signup-tenant', { organisation: { name: f.orgName, slug: f.slug, types: f.types }, name: f.name, email: f.email, phone: f.phone, password: f.password });
-      if (r.data.host && r.data.host !== window.location.host) {
-        window.location.href = `${window.location.protocol}//${r.data.host}/login`;
+      const host = r.data.host && `${r.data.host}${window.location.port ? `:${window.location.port}` : ''}`;
+      if (host && host !== window.location.host) {
+        window.location.href = `${window.location.protocol}//${host}/login`;
         return;
       }
       localStorage.setItem('eb_token', r.data.token);
