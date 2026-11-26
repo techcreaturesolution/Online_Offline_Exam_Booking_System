@@ -54,6 +54,7 @@ router.post('/tenants/:id/impersonate', async (req, res) => {
   const { reason } = z.object({ reason: z.string().trim().min(5).max(300) }).parse(req.body);
   const tenant = await Tenant.findById(req.params.id).lean();
   if (!tenant) throw new HttpError(404, 'Tenant not found');
+  if (['suspended', 'cancelled'].includes(tenant.status)) throw new HttpError(400, `Reactivate this ${tenant.status} tenant before opening a support session`);
   const admin = await User.findOne({ tenant: tenant._id, role: ROLES.SUPER_ADMIN, status: 'active' }).sort({ createdAt: 1 });
   if (!admin) throw new HttpError(400, 'Tenant has no active Super Admin');
   await audit(req, 'platform.impersonation_started', 'User', admin._id, null, { reason, tenant: tenant.slug }, { tenant: tenant._id });

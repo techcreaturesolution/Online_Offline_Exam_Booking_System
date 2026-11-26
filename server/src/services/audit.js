@@ -36,8 +36,8 @@ export function auditWrites(req, res, next) {
   const tenant = currentTenant() || req.user.tenant || null;
   const body = req.body && Object.keys(req.body).length ? req.body : null;
   res.on('finish', () => {
-    if (res.statusCode >= 400 || req.originalUrl.includes('/notifications')) return;
     const parts = req.originalUrl.split('?')[0].replace(/^\/api(\/v1)?\//, '').split('/');
+    if (res.statusCode >= 400 || parts[0] === 'notifications') return;
     const entityId = parts.find((p) => /^[a-f0-9]{24}$/.test(p)) || '';
     audit(req, `${req.method} /${parts.map((p) => (/^[a-f0-9]{24}$/.test(p) ? ':id' : p)).join('/')}`, ENTITY[['admin', 'platform'].includes(parts[0]) ? parts[1] : parts[0]] || parts[0], entityId, null, body, { status: res.statusCode, tenant }).catch((e) => console.error('[audit]', e.message));
   });

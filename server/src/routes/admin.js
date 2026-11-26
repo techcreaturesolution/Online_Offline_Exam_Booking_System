@@ -48,7 +48,12 @@ router.get('/users', async (req, res) => {
   res.json({ users });
 });
 
+const noSupportCredentials = (req) => {
+  if (req.impersonatedBy) throw new HttpError(403, 'Support sessions cannot create accounts or set passwords');
+};
+
 router.post('/users', async (req, res) => {
+  noSupportCredentials(req);
   const body = userSchema.parse(req.body);
   if (await User.exists({ email: body.email.toLowerCase() })) throw new HttpError(409, 'Email already in use');
   const links = await checkLinks(body.role, body.organization, body.centers);
@@ -58,6 +63,7 @@ router.post('/users', async (req, res) => {
 
 router.put('/users/:id', async (req, res) => {
   const body = userSchema.partial().extend({ status: z.enum(['pending', 'active', 'disabled']).optional() }).parse(req.body);
+  if (body.password) noSupportCredentials(req);
   const user = await User.findById(req.params.id);
   if (!user) throw new HttpError(404, 'User not found');
   if (String(user._id) === String(req.user._id) && (body.status === 'disabled' || (body.role && body.role !== user.role))) {

@@ -14,8 +14,6 @@ const userSchema = new mongoose.Schema(
     centers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Center' }],
     lastLoginAt: Date,
     passwordChangedAt: Date,
-    failedLogins: { type: Number, default: 0, select: false },
-    lockedUntil: { type: Date, default: null, select: false },
   },
   { timestamps: true },
 );

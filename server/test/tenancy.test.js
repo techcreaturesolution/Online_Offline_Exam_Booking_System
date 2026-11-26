@@ -128,7 +128,13 @@ test('platform owner lists, suspends and impersonates tenants; every step is aud
   assert.equal(me.data.tenant.slug, 'acme');
   assert.ok(me.data.impersonatedBy);
   await call('PATCH', '/tenant', { token: imp.data.token, body: { branding: { primaryColor: '#123456' } } });
+  assert.equal((await call('POST', '/admin/users', { token: imp.data.token, body: { name: 'Backdoor', email: 'backdoor@acme.test', password: 'Backdoor@1', role: 'super_admin' } })).status, 403);
+  assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { password: 'Backdoor@1' } })).status, 403);
+  assert.equal((await call('PUT', '/auth/me/password', { token: imp.data.token, body: { currentPassword: DEMO_PASSWORD, newPassword: 'Backdoor@1' } })).status, 403);
 
+  await call('PATCH', `/platform/tenants/${acme._id}`, { token: owner, body: { status: 'suspended' } });
+  assert.equal((await call('POST', `/platform/tenants/${acme._id}/impersonate`, { token: owner, body: { reason: 'Support ticket 43' } })).status, 400);
+  await call('PATCH', `/platform/tenants/${acme._id}`, { token: owner, body: { status: 'active' } });
   const logs = (await call('GET', '/tenant/audit-logs', { token: acmeToken })).data.items;
   const actions = logs.map((l) => l.action);
   assert.ok(actions.includes('platform.impersonation_started'));
@@ -155,8 +161,15 @@ test('audit log is immutable and records writes; repeated bad passwords lock the
   await assert.rejects(() => asPlatform(() => AuditLog.updateOne({}, { action: 'tampered' })), /immutable/);
   await assert.rejects(() => asPlatform(() => AuditLog.deleteMany({})), /immutable/);
 
+  const noteWrite = await call('PUT', `/admin/users/${agency._id}?x=/notifications`, { token: main, body: { phone: '8888888888' } });
+  assert.equal(noteWrite.status, 200);
+  await new Promise((r) => setTimeout(r, 100));
+  const latest = (await call('GET', '/tenant/audit-logs?entity=User', { token: main })).data.items;
+  assert.ok(latest.some((l) => l.after?.phone === '8888888888'));
+
   for (let i = 0; i < 5; i += 1) assert.equal((await login('agency2@examhub.test', 'wrong-password')).status, 401);
   assert.equal((await login('agency2@examhub.test', 'Changed@123')).status, 429);
+  assert.equal((await login('agency@examhub.test')).status, 200);
 });
 
 test('tenant admin exports data and schedules deletion with a grace period', { skip }, async (t) => {

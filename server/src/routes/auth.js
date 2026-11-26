@@ -23,28 +23,42 @@ async function profile(userId) {
 
 const MAX_FAILED = 5;
 const LOCK_MS = 15 * 60 * 1000;
+// Failed attempts are tracked per email + client IP, so a stranger cannot lock a user out everywhere.
+const failures = new Map();
+const failKey = (email, ip) => `${email}|${ip}`;
+function isLocked(key) {
+  const f = failures.get(key);
+  if (f?.lockedUntil && f.lockedUntil > Date.now()) return true;
+  if (f?.lockedUntil) failures.delete(key);
+  return false;
+}
+function recordFailure(key) {
+  const f = failures.get(key) || { count: 0 };
+  f.count += 1;
+  if (f.count >= MAX_FAILED) Object.assign(f, { count: 0, lockedUntil: Date.now() + LOCK_MS });
+  failures.set(key, f);
+  if (failures.size > 50000) failures.delete(failures.keys().next().value);
+}
 
 router.post('/login', limiter, async (req, res) => {
   const { email, password } = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
-  const user = await asPlatform(() => User.findOne({ email: email.toLowerCase() }).select('+passwordHash +failedLogins +lockedUntil'));
-  if (user?.lockedUntil && user.lockedUntil > new Date()) throw new HttpError(429, 'Too many failed attempts. Try again in 15 minutes.');
+  const key = failKey(email.toLowerCase(), req.ip);
+  if (isLocked(key)) throw new HttpError(429, 'Too many failed attempts. Try again in 15 minutes.');
+  const user = await asPlatform(() => User.findOne({ email: email.toLowerCase() }).select('+passwordHash'));
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    if (user) {
-      user.failedLogins = (user.failedLogins || 0) + 1;
-      if (user.failedLogins >= MAX_FAILED) Object.assign(user, { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MS) });
-      await asPlatform(() => user.save());
-    }
+    recordFailure(key);
     throw new HttpError(401, 'Invalid email or password');
   }
+  failures.delete(key);
   if (user.status === 'pending') throw new HttpError(403, 'Your account is waiting for Super Admin approval');
   if (user.status !== 'active') throw new HttpError(403, 'Your account is disabled');
   const tenant = user.tenant ? await asPlatform(() => Tenant.findById(user.tenant).lean()) : null;
   if (tenant && ['suspended', 'cancelled'].includes(tenant.status)) throw new HttpError(403, `Your organisation account is ${tenant.status}. Contact support.`);
   const slug = requestedTenantSlug(req);
   if (tenant && slug && slug !== tenant.slug) throw new HttpError(401, 'Invalid email or password');
-  Object.assign(user, { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null });
+  user.lastLoginAt = new Date();
   await asPlatform(() => user.save());
-  const { passwordHash: _p, failedLogins: _f, lockedUntil: _l, ...safe } = await asPlatform(() => profile(user._id));
+  const { passwordHash: _p, ...safe } = await asPlatform(() => profile(user._id));
   res.json({ token: signToken(user), user: safe, tenant: tenant && { _id: tenant._id, name: tenant.name, slug: tenant.slug, status: tenant.status, branding: tenant.branding } });
 });
 
@@ -68,12 +82,17 @@ router.post('/signup-tenant', limiter, async (req, res) => {
     if (await User.exists({ email: body.email.toLowerCase() })) throw new HttpError(409, 'An account with this email already exists');
     return Tenant.create({ ...body.organisation, contactEmail: body.email, status: 'trial', plan: 'trial', trialEndsAt: new Date(Date.now() + env.trialDays * 86400000) });
   });
-  const user = await withTenant(result._id, async () => {
-    const u = await User.create({ name: body.name, email: body.email, phone: body.phone, passwordHash: await bcrypt.hash(body.password, 10), role: ROLES.SUPER_ADMIN });
-    await audit({ user: u, ip: req.ip }, 'tenant.signup', 'Tenant', result._id, null, { name: result.name, slug: result.slug, types: result.types });
-    return u;
-  });
-  res.status(201).json({ token: signToken(user), tenant: { _id: result._id, name: result.name, slug: result.slug, status: result.status, trialEndsAt: result.trialEndsAt } });
+  let user;
+  try {
+    user = await withTenant(result._id, async () => User.create({ name: body.name, email: body.email, phone: body.phone, passwordHash: await bcrypt.hash(body.password, 10), role: ROLES.SUPER_ADMIN }));
+  } catch (err) {
+    await asPlatform(() => Tenant.deleteOne({ _id: result._id }));
+    if (err?.code === 11000) throw new HttpError(409, 'An account with this email already exists');
+    throw err;
+  }
+  await audit({ user, ip: req.ip }, 'tenant.signup', 'Tenant', result._id, null, { name: result.name, slug: result.slug, types: result.types }, { tenant: result._id });
+  const host = env.tenantBaseDomain ? `${result.slug}.${env.tenantBaseDomain}` : null;
+  res.status(201).json({ token: signToken(user), host, tenant: { _id: result._id, name: result.name, slug: result.slug, status: result.status, trialEndsAt: result.trialEndsAt } });
 });
 
 const signupSchema = z.object({
@@ -118,6 +137,7 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 router.put('/me/password', requireAuth, async (req, res) => {
+  if (req.impersonatedBy) throw new HttpError(403, 'Support sessions cannot change passwords');
   const { currentPassword, newPassword } = z.object({ currentPassword: z.string(), newPassword: passwordSchema }).parse(req.body);
   const user = await User.findById(req.user._id).select('+passwordHash');
   if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new HttpError(400, 'Current password is incorrect');
