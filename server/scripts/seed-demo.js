@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { connectDb } from '../src/config/db.js';
@@ -110,7 +111,7 @@ export async function seedDemo() {
   return { users: users.map((u) => ({ email: u.email, role: u.role })) };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await connectDb();
   const { users } = await seedDemo();
   console.log(`Seeded demo data. Password for every account: ${DEMO_PASSWORD}`);
