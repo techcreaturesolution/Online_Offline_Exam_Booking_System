@@ -32,7 +32,12 @@ Statuses: `requested → allocated → confirmed → ready → in_progress → c
 - Role dashboards: action-needed queue, status counts, candidates, attendance %, upcoming shifts, utilization charts
 - Readiness checklists (network for online; center + strong room/answer sheets for offline)
 - Candidate CSV upload, automatic seat plan, printable seat list and CSV
-- Attendance per shift, incident log (high severity notifies everyone), center rating
+- Exam start and attendance only on the exam date; lab-wise attendance recorded by the exam agency
+- Mock day for online exams: institute or agency requests a date before the exam, the Network Admin allocates labs, the Booking Vendor grants lab permission, and the agency records the mock result
+- Lab planning view with seat ranges per lab for exam shifts and mock days; overlapping exams in one lab get separate seat numbers
+- Allocation saves are serialised per center and date, so simultaneous saves cannot overbook a lab
+- User directory for the exam agency (all active users except Super Admins)
+- Incident log (high severity notifies everyone), center rating
 - Billing (rate per seat, invoice, payment status), booking CSV export
 - In-app notifications with optional SMTP e-mail copies
 - Institute self-registration with admin approval

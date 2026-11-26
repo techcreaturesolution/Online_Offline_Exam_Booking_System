@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import AllocationPanel from '../components/booking/AllocationPanel.jsx';
 import CandidatesPanel from '../components/booking/CandidatesPanel.jsx';
+import MockPanel from '../components/booking/MockPanel.jsx';
 import ConductPanel from '../components/booking/ConductPanel.jsx';
 import ReadinessPanel from '../components/booking/ReadinessPanel.jsx';
 import { AgencyCard, BillingCard, CancelCard, FeedbackCard, Timeline } from '../components/booking/SidePanel.jsx';
@@ -42,7 +43,7 @@ export default function BookingDetail() {
 
   if (error && !data) return <Alert>{error}</Alert>;
   if (!data) return <Spinner />;
-  const { booking, allocation, actions, checklists, candidates } = data;
+  const { booking, allocation, mockAllocations = [], actions, checklists, candidates } = data;
   const total = booking.shifts.reduce((n, s) => n + s.candidates, 0);
   const present = booking.shifts.reduce((n, s) => n + (s.attendance?.present || 0), 0);
 
@@ -78,8 +79,9 @@ export default function BookingDetail() {
             </div>
           )}
           {booking.status !== 'cancelled' && <AllocationPanel booking={booking} allocation={allocation} actions={actions} reload={load} />}
+          {booking.mode === 'online' && booking.status !== 'cancelled' && (booking.mock || actions.includes('mockRequest')) && <MockPanel key={`m-${booking.updatedAt}`} booking={booking} mockAllocations={mockAllocations} actions={actions} reload={load} />}
           {booking.status !== 'cancelled' && <ReadinessPanel key={`r-${booking.updatedAt}`} booking={booking} checklists={checklists} actions={actions} reload={load} />}
-          {['ready', 'in_progress', 'completed'].includes(booking.status) && <ConductPanel key={`c-${booking.updatedAt}`} booking={booking} actions={actions} reload={load} />}
+          {['ready', 'in_progress', 'completed'].includes(booking.status) && <ConductPanel key={`c-${booking.updatedAt}`} booking={booking} allocation={allocation} actions={actions} reload={load} />}
           {booking.status !== 'cancelled' && <CandidatesPanel booking={booking} count={candidates} actions={actions} reload={load} />}
         </div>
         <div className="space-y-5">

@@ -11,7 +11,9 @@ function navFor(role) {
   ];
   if (['institute_admin', 'super_admin'].includes(role)) items.push({ to: '/bookings/new', label: 'New booking' });
   items.push({ to: '/centers', label: ['network_admin', 'center_incharge'].includes(role) ? 'My centers & labs' : 'Centers & labs' });
+  items.push({ to: '/planning', label: 'Lab planning' });
   items.push({ to: '/utilization', label: 'Lab utilization' });
+  if (role === 'exam_agency') items.push({ to: '/directory', label: 'User directory' });
   if (role === 'super_admin') items.push({ to: '/admin', label: 'Users & organizations' });
   return items;
 }

@@ -42,7 +42,23 @@ export const ACTION_LABELS = {
   feedback: 'Feedback',
   candidates_uploaded: 'Candidates uploaded',
   seat_plan: 'Seat plan generated',
+  mock_requested: 'Mock day requested',
+  mock_cancelled: 'Mock day cancelled',
+  mock_allocated: 'Mock day labs allocated',
+  mock_permitted: 'Mock day lab permission granted',
+  mock_rejected: 'Mock day sent back for changes',
+  mock_completed: 'Mock day completed',
 };
+
+export const MOCK_STATUS = {
+  requested: 'Waiting for Network Admin lab allocation',
+  allocated: 'Waiting for Booking Vendor lab permission',
+  approved: 'Permitted – agency conducts the mock test',
+  completed: 'Mock test completed',
+};
+
+const pad = (n) => String(n).padStart(3, '0');
+export const seatRange = (a) => `seats ${pad(a.seatFrom || 1)}–${pad((a.seatFrom || 1) + a.seats - 1)}`;
 
 export const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 export const fmtDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '');

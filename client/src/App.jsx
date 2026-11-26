@@ -11,6 +11,8 @@ import Dashboard from './pages/Dashboard.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import NewBooking from './pages/NewBooking.jsx';
+import Planning from './pages/Planning.jsx';
+import Directory from './pages/Directory.jsx';
 import Register from './pages/Register.jsx';
 import SeatPlan from './pages/SeatPlan.jsx';
 import Utilization from './pages/Utilization.jsx';
@@ -38,7 +40,9 @@ export default function App() {
         <Route path="/bookings/:id" element={<BookingDetail />} />
         <Route path="/centers" element={<Centers />} />
         <Route path="/centers/:id" element={<CenterDetail />} />
+        <Route path="/planning" element={<Planning />} />
         <Route path="/utilization" element={<Utilization />} />
+        <Route path="/directory" element={<Private roles={['exam_agency', 'super_admin']}><Directory /></Private>} />
         <Route path="/admin" element={<Private roles={['super_admin']}><Admin /></Private>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
