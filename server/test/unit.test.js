@@ -58,7 +58,7 @@ test('readiness, start and completion follow the role and status rules', () => {
   assert.match(denyReason('readiness:network', net, booking({ mode: 'offline', status: 'confirmed' })), /Offline/);
   assert.equal(denyReason('readiness:network', net, booking({ status: 'confirmed' })), null);
   assert.match(denyReason('start', agency, booking({ status: 'confirmed' })), /readiness/);
-  assert.equal(denyReason('start', agency, booking({ status: 'ready' })), null);
+  assert.equal(denyReason('start', agency, booking({ status: 'ready', shifts: [{ date: '2030-05-10', candidates: 5 }] }), { today: '2030-05-10' }), null);
   assert.match(denyReason('start', agency, booking({ status: 'ready', agency: 'z'.repeat(24) })), /agency/);
   assert.match(denyReason('complete', agency, booking({ status: 'in_progress' })), /attendance/);
   assert.equal(denyReason('complete', agency, booking({ status: 'in_progress', shifts: [{ candidates: 10, attendance: { present: 9 } }] })), null);
@@ -170,6 +170,8 @@ test('exam start and attendance are allowed only on the exam date', () => {
   assert.match(denyReason('start', agency, b, { today: '2030-05-09' }), /only on its exam date/);
   assert.equal(denyReason('start', agency, b, { today: '2030-05-10' }), null);
   assert.match(denyReason('start', agency, b, { today: '2030-05-11' }), /passed/);
+  const split = booking({ status: 'ready', shifts: [{ date: '2030-05-10', candidates: 5 }, { date: '2030-05-14', candidates: 5 }] });
+  assert.match(denyReason('start', agency, split, { today: '2030-05-12' }), /2030-05-14/);
   const live = { ...b, status: 'in_progress' };
   assert.equal(denyReason('attendance', agency, live, { today: '2030-05-10' }), null);
   assert.match(denyReason('attendance', agency, live, { today: '2030-05-12' }), /exam date/);

@@ -72,3 +72,17 @@ npm run build
 server/  Express API: src/models, src/routes, src/services (workflow, allocation, utilization, seat plan, notify), scripts/seed-demo.js, test/
 client/  React + Vite + Tailwind: src/pages, src/components, src/lib
 ```
+
+## SaaS roadmap and project docs
+
+- [docs/SRS-ExamHub-SaaS.md](docs/SRS-ExamHub-SaaS.md): ExamHub SaaS requirements specification
+- [docs/GAP-ANALYSIS.md](docs/GAP-ANALYSIS.md): SRS section 1 checked against the code
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/ROADMAP.md](docs/ROADMAP.md)
+
+## API docs, probes and Docker
+
+- Every route is served under `/api` and `/api/v1`. The OpenAPI spec is `server/openapi.yaml`, and Swagger UI is at `/api/docs`.
+- `GET /api/health` is the liveness probe. `GET /api/health/ready` returns 503 until MongoDB is connected.
+- `JWT_SECRET=<long-random> docker compose up --build` starts MongoDB and the app (API and built client) on http://localhost:5000.
+- CI (`.github/workflows/ci.yml`) runs lint, tests against MongoDB, build, `npm audit --audit-level=high` and a Docker build.
+- Prettier: run `npm run format:check` or `npm run format`.
