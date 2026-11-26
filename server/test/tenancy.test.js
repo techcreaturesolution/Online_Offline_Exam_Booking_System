@@ -130,6 +130,7 @@ test('platform owner lists, suspends and impersonates tenants; every step is aud
   await call('PATCH', '/tenant', { token: imp.data.token, body: { branding: { primaryColor: '#123456' } } });
   assert.equal((await call('POST', '/admin/users', { token: imp.data.token, body: { name: 'Backdoor', email: 'backdoor@acme.test', password: 'Backdoor@1', role: 'super_admin' } })).status, 403);
   assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { password: 'Backdoor@1' } })).status, 403);
+  assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { role: 'booking_vendor' } })).status, 403);
   assert.equal((await call('PUT', '/auth/me/password', { token: imp.data.token, body: { currentPassword: DEMO_PASSWORD, newPassword: 'Backdoor@1' } })).status, 403);
 
   await call('PATCH', `/platform/tenants/${acme._id}`, { token: owner, body: { status: 'suspended' } });

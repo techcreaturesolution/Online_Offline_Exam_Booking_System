@@ -49,7 +49,7 @@ router.get('/users', async (req, res) => {
 });
 
 const noSupportCredentials = (req) => {
-  if (req.impersonatedBy) throw new HttpError(403, 'Support sessions cannot create accounts or set passwords');
+  if (req.impersonatedBy) throw new HttpError(403, 'Support sessions cannot create accounts, set passwords or change roles');
 };
 
 router.post('/users', async (req, res) => {
@@ -63,7 +63,7 @@ router.post('/users', async (req, res) => {
 
 router.put('/users/:id', async (req, res) => {
   const body = userSchema.partial().extend({ status: z.enum(['pending', 'active', 'disabled']).optional() }).parse(req.body);
-  if (body.password) noSupportCredentials(req);
+  if (body.password || body.role) noSupportCredentials(req);
   const user = await User.findById(req.params.id);
   if (!user) throw new HttpError(404, 'User not found');
   if (String(user._id) === String(req.user._id) && (body.status === 'disabled' || (body.role && body.role !== user.role))) {
