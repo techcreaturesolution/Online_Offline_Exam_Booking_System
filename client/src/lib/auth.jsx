@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!getToken()) return;
+    const support = Boolean(sessionStorage.getItem(SUPPORT_KEY));
     api
       .get('/auth/me')
       .then((r) => {
@@ -18,7 +19,7 @@ export function AuthProvider({ children }) {
         setTenant(r.data.tenant || null);
         setImpersonatedBy(r.data.impersonatedBy || null);
       })
-      .catch(() => localStorage.removeItem('eb_token'))
+      .catch(() => (support ? sessionStorage.removeItem(SUPPORT_KEY) : localStorage.removeItem('eb_token')))
       .finally(() => setLoading(false));
   }, []);
 

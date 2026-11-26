@@ -4,7 +4,12 @@ export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api
 
 // A platform support session lives only in the tab that opened it (sessionStorage); the owner's own token stays in localStorage.
 export const SUPPORT_KEY = 'eb_support_token';
-export const getToken = () => sessionStorage.getItem(SUPPORT_KEY) || localStorage.getItem('eb_token');
+export function getToken() {
+  const owner = localStorage.getItem('eb_token');
+  // Signing out of the console (owner token gone) ends support sessions in every tab.
+  if (!owner) sessionStorage.removeItem(SUPPORT_KEY);
+  return (owner && sessionStorage.getItem(SUPPORT_KEY)) || owner;
+}
 
 api.interceptors.request.use((config) => {
   const token = getToken();
