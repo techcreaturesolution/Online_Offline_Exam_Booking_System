@@ -88,7 +88,8 @@ export async function seedDemo() {
   ], timeline: [ev('requested'), ev('allocated', 'All shifts have lab allocation')] }, [[0, 'LAB-A', 110], [0, 'LAB-B', 40]]);
   await booking({ institute: gtu._id, center: srt._id, agency: agency._id, examName: 'Diploma Engineering Online Exam', examCode: 'DIP-ONL', mode: 'online', status: 'confirmed', review: { decision: 'approved', by: users[3]._id, at: new Date() }, shifts: [
     { label: 'Morning', date: addDays(today, 3), startTime: '09:00', endTime: '11:00', candidates: 200 },
-  ], readiness: { network: { items: { lan: true, systems: true }, done: false } }, timeline: [ev('requested'), ev('allocated'), ev('confirmed')] }, [[0, 'S-LAB1', 140], [0, 'S-LAB2', 60]]);
+  ], mock: { status: 'requested', date: addDays(today, 1), startTime: '15:00', endTime: '16:00', candidates: 60, notes: 'Mock test for system and login check', requestedBy: users[7]._id, requestedRole: 'exam_agency' },
+  readiness: { network: { items: { lan: true, systems: true }, done: false } }, timeline: [ev('requested'), ev('allocated'), ev('confirmed'), ev('mock_requested')] }, [[0, 'S-LAB1', 140], [0, 'S-LAB2', 60]]);
   await booking({ institute: gtu._id, center: vad._id, agency: agency2._id, examName: 'B.Com Semester III Written Exam', examCode: 'BCOM-S3', mode: 'offline', status: 'ready', review: { decision: 'approved', by: users[1]._id, at: new Date() }, shifts: [
     { label: 'Paper 1', date: addDays(today, 1), startTime: '10:00', endTime: '13:00', candidates: 420 },
   ], readiness: { center: { items: full([...CENTER_CHECKLIST, ...OFFLINE_EXTRA_CHECKLIST]), done: true, by: users[6]._id, at: new Date() } }, timeline: [ev('requested'), ev('allocated'), ev('confirmed'), ev('center_checklist', 'Completed')] }, [[0, 'V-HN', 240], [0, 'V-HS', 180]]);

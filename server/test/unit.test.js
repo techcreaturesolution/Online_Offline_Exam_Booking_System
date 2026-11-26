@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { usableSeats } from '../src/models/Lab.js';
-import { suggestPlan, takenSeats, validatePlan } from '../src/services/allocation.js';
+import { firstFreeRange, suggestPlan, takenSeats, validatePlan } from '../src/services/allocation.js';
 import { buildSeatPlan } from '../src/services/seatPlan.js';
 import { bookingCounts, computeUtilization } from '../src/services/utilization.js';
 import { allocatorRole, denyReason, reviewerRole } from '../src/services/workflow.js';
@@ -151,4 +151,26 @@ test('CSV helpers round-trip quotes and neutralise formulas', () => {
   assert.deepEqual(parseCsv('rollNo,name\r\n1,"Shah, Ravi"\n2,"A ""B"""\n'), [['rollNo', 'name'], ['1', 'Shah, Ravi'], ['2', 'A "B"']]);
   assert.throws(() => parseCsv('rollNo,name\n1,"Shah\n2,Patel\n'), /unclosed quote/);
   assert.equal(toCsv(['a'], [['=SUM(1)']]), "a\r\n'=SUM(1)");
+});
+
+test('overlapping exams in one lab get separate seat ranges', () => {
+  assert.equal(firstFreeRange([], 40, 100), 1);
+  assert.equal(firstFreeRange([{ seatFrom: 1, seats: 40 }], 30, 100), 41);
+  assert.equal(firstFreeRange([{ seatFrom: 41, seats: 20 }], 40, 100), 1);
+  assert.equal(firstFreeRange([{ seatFrom: 31, seats: 20 }], 40, 100), 51);
+  assert.equal(firstFreeRange([{ seatFrom: 31, seats: 40 }], 40, 100), null);
+  const lab = { _id: 'l1', code: 'LAB1' };
+  const { updates } = buildSeatPlan([{ _id: 'c1', rollNo: '1', shiftId: 's' }], [{ shiftId: 's', lab, seats: 10, seatFrom: 41 }]);
+  assert.equal(updates[0].seatNo, 'LAB1-041');
+});
+
+test('exam start and attendance are allowed only on the exam date', () => {
+  const agency = user('exam_agency', { organization: A });
+  const b = booking({ status: 'ready', shifts: [{ date: '2030-05-10', candidates: 10, attendance: { present: null } }] });
+  assert.match(denyReason('start', agency, b, { today: '2030-05-09' }), /only on its exam date/);
+  assert.equal(denyReason('start', agency, b, { today: '2030-05-10' }), null);
+  assert.match(denyReason('start', agency, b, { today: '2030-05-11' }), /passed/);
+  const live = { ...b, status: 'in_progress' };
+  assert.equal(denyReason('attendance', agency, live, { today: '2030-05-10' }), null);
+  assert.match(denyReason('attendance', agency, live, { today: '2030-05-12' }), /exam date/);
 });

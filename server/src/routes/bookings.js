@@ -8,7 +8,7 @@ import { LabAllocation } from '../models/LabAllocation.js';
 import { Organization } from '../models/Organization.js';
 import { NETWORK_CHECKLIST, ROLES, centerChecklistFor } from '../models/roles.js';
 import { bookingScope } from '../services/access.js';
-import { allocationSummary, availability, suggestPlan, validatePlan } from '../services/allocation.js';
+import { allocationSummary, availability, saveAllocation, suggestPlan } from '../services/allocation.js';
 import { notifyBooking } from '../services/notify.js';
 import { buildSeatPlan } from '../services/seatPlan.js';
 import { allowedActions, denyReason, readinessKinds } from '../services/workflow.js';
@@ -170,9 +170,13 @@ router.get('/:id', async (req, res) => {
   const plain = booking.toObject({ flattenMaps: true });
   const summary = await allocationSummary(booking);
   const candidates = await Candidate.countDocuments({ booking: booking._id });
+  const mockAllocations = booking.mock
+    ? await LabAllocation.find({ booking: booking._id, shiftId: booking.mock._id }).populate('lab', 'name code type floor').populate('allocatedBy', 'name').lean()
+    : [];
   res.json({
     booking: plain,
     allocation: summary,
+    mockAllocations,
     candidates,
     actions: allowedActions(req.user, { ...plain, center: booking.center._id, institute: booking.institute._id, agency: booking.agency?._id || null }, { center, hasAllocations: summary.totalSeats > 0 }),
     checklists: { network: NETWORK_CHECKLIST, center: centerChecklistFor(booking.mode) },
@@ -208,15 +212,7 @@ router.put('/:id/allocations/:shiftId', async (req, res) => {
   const shift = booking.shifts.id(req.params.shiftId);
   if (!shift) throw new HttpError(404, 'Shift not found');
   const { items } = z.object({ items: z.array(z.object({ lab: objectId, seats: z.number().int().min(1) })).max(50) }).parse(req.body);
-  const ignore = { booking: booking._id, shiftId: shift._id };
-  const labs = await availability({ center: booking.center, date: shift.date, startTime: shift.startTime, endTime: shift.endTime, mode: booking.mode, ignore });
-  const total = validatePlan(items, labs, shift);
-  await LabAllocation.deleteMany(ignore);
-  if (items.length) {
-    await LabAllocation.insertMany(
-      items.map((it) => ({ ...ignore, center: booking.center, lab: it.lab, seats: it.seats, date: shift.date, startTime: shift.startTime, endTime: shift.endTime, allocatedBy: req.user._id })),
-    );
-  }
+  const { total, labs } = await saveAllocation({ booking, shiftId: shift._id, window: shift, items, userId: req.user._id });
   const summary = await allocationSummary(booking);
   const before = booking.status;
   booking.status = summary.complete ? 'allocated' : 'requested';
@@ -230,6 +226,107 @@ router.put('/:id/allocations/:shiftId', async (req, res) => {
   }
   await booking.save();
   res.json({ allocation: summary, status: booking.status });
+});
+
+const mockSchema = z
+  .object({
+    date: z.string().regex(DATE_RE, 'Use YYYY-MM-DD'),
+    startTime: z.string().regex(TIME_RE, 'Use HH:MM'),
+    endTime: z.string().regex(TIME_RE, 'Use HH:MM'),
+    candidates: z.number().int().min(1).max(100000),
+    notes: z.string().trim().max(1000).optional().default(''),
+  })
+  .refine((s) => toMinutes(s.endTime) > toMinutes(s.startTime), { message: 'End time must be after start time', path: ['endTime'] });
+
+const mockWindow = (m) => `${m.date} ${m.startTime}-${m.endTime}`;
+
+router.put('/:id/mock', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockRequest', req.user, booking, { center });
+  const body = mockSchema.parse(req.body);
+  const first = booking.shifts.map((s) => s.date).sort()[0];
+  if (body.date < todayIso()) throw new HttpError(400, 'Mock day cannot be in the past');
+  if (body.date >= first) throw new HttpError(400, `Mock day must be before the exam date (${first})`);
+  if (toMinutes(body.startTime) < toMinutes(center.openTime) || toMinutes(body.endTime) > toMinutes(center.closeTime)) {
+    throw new HttpError(400, `Mock day must be within center hours ${center.openTime}-${center.closeTime}`);
+  }
+  const max = Math.max(...booking.shifts.map((s) => s.candidates));
+  if (body.candidates > max) throw new HttpError(400, `Mock day candidates cannot exceed the largest shift (${max})`);
+  if (booking.mock) await LabAllocation.deleteMany({ booking: booking._id, shiftId: booking.mock._id });
+  booking.mock = { ...body, status: 'requested', requestedBy: req.user._id, requestedRole: req.user.role };
+  booking.timeline.push(event(req.user, 'mock_requested', `${mockWindow(body)}, ${body.candidates} candidates`));
+  await booking.save();
+  await notifyBooking(booking, `Mock day requested: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(body)} needs lab allocation.`, { exclude: req.user._id, roles: [ROLES.NETWORK, ROLES.VENDOR] });
+  res.json({ booking });
+});
+
+router.delete('/:id/mock', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockRequest', req.user, booking, { center });
+  if (!booking.mock) throw new HttpError(404, 'No mock day requested');
+  await LabAllocation.deleteMany({ booking: booking._id, shiftId: booking.mock._id });
+  booking.mock = null;
+  booking.timeline.push(event(req.user, 'mock_cancelled'));
+  await booking.save();
+  res.json({ booking });
+});
+
+router.get('/:id/mock/suggest', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockAllocate', req.user, booking, { center });
+  const m = booking.mock;
+  const labs = await availability({ center: booking.center, date: m.date, startTime: m.startTime, endTime: m.endTime, mode: booking.mode, ignore: { booking: booking._id, shiftId: m._id } });
+  res.json({ labs, ...suggestPlan(labs, m.candidates) });
+});
+
+router.put('/:id/mock/allocation', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockAllocate', req.user, booking, { center });
+  const { items } = z.object({ items: z.array(z.object({ lab: objectId, seats: z.number().int().min(1) })).max(50) }).parse(req.body);
+  const m = booking.mock;
+  const { total, labs } = await saveAllocation({ booking, shiftId: m._id, kind: 'mock', window: m, items, userId: req.user._id });
+  m.status = total >= m.candidates ? 'allocated' : 'requested';
+  m.permission = { decision: null, note: '' };
+  const labCodes = items.map((it) => labs.find((l) => String(l._id) === it.lab)?.code).join(', ');
+  booking.timeline.push(event(req.user, 'mock_allocated', `${total}/${m.candidates} seats${labCodes ? ` in ${labCodes}` : ''}`));
+  await booking.save();
+  if (m.status === 'allocated') {
+    await notifyBooking(booking, `Mock day labs allocated: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(m)} needs lab permission.`, { exclude: req.user._id, roles: [ROLES.VENDOR, ROLES.AGENCY, ROLES.INSTITUTE] });
+  }
+  res.json({ booking });
+});
+
+router.post('/:id/mock/permission', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockPermission', req.user, booking, { center });
+  const { decision, note } = z.object({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(1000).optional().default('') }).parse(req.body);
+  if (decision === 'rejected' && !note) throw new HttpError(400, 'Add a note explaining what needs to change');
+  const m = booking.mock;
+  m.permission = { decision, note, by: req.user._id, at: new Date() };
+  m.status = decision === 'approved' ? 'approved' : 'requested';
+  booking.timeline.push(event(req.user, decision === 'approved' ? 'mock_permitted' : 'mock_rejected', note));
+  await booking.save();
+  await notifyBooking(
+    booking,
+    `Mock day ${decision === 'approved' ? 'permitted' : 'needs changes'}: ${booking.bookingNo}`,
+    `${booking.examName}: mock day ${mockWindow(m)}${note ? ` - ${note}` : ''}`,
+    { exclude: req.user._id },
+  );
+  res.json({ booking });
+});
+
+router.post('/:id/mock/result', async (req, res) => {
+  const { booking, center } = await loadBooking(req);
+  assertAllowed('mockResult', req.user, booking, { center });
+  const { present, remarks } = z.object({ present: z.number().int().min(0), remarks: z.string().trim().max(2000).optional().default('') }).parse(req.body);
+  const m = booking.mock;
+  if (present > m.candidates) throw new HttpError(400, `Mock day had ${m.candidates} candidates`);
+  m.result = { present, remarks, by: req.user._id, at: new Date() };
+  m.status = 'completed';
+  booking.timeline.push(event(req.user, 'mock_completed', `${present}/${m.candidates} appeared${remarks ? ` - ${remarks}` : ''}`));
+  await booking.save();
+  await notifyBooking(booking, `Mock day completed: ${booking.bookingNo}`, `${booking.examName}: ${present}/${m.candidates} candidates appeared in the mock test.`, { exclude: req.user._id });
+  res.json({ booking });
 });
 
 router.post('/:id/review', async (req, res) => {
@@ -303,7 +400,30 @@ router.put('/:id/shifts/:shiftId/attendance', async (req, res) => {
   assertAllowed('attendance', req.user, booking, { center });
   const shift = booking.shifts.id(req.params.shiftId);
   if (!shift) throw new HttpError(404, 'Shift not found');
-  const { present, absent } = z.object({ present: z.number().int().min(0), absent: z.number().int().min(0) }).parse(req.body);
+  if (req.user.role !== ROLES.SUPER_ADMIN && shift.date !== todayIso()) throw new HttpError(403, `Attendance for this shift is recorded on its exam date (${shift.date})`);
+  const body = z
+    .object({
+      present: z.number().int().min(0).optional(),
+      absent: z.number().int().min(0).optional(),
+      labs: z.array(z.object({ allocation: objectId, present: z.number().int().min(0) })).max(50).optional(),
+    })
+    .parse(req.body);
+  let { present, absent } = body;
+  if (body.labs) {
+    const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).populate('lab', 'code').lean();
+    const byId = new Map(allocs.map((a) => [String(a._id), a]));
+    for (const row of body.labs) {
+      const a = byId.get(row.allocation);
+      if (!a) throw new HttpError(400, 'Lab allocation not found for this shift');
+      if (row.present > a.seats) throw new HttpError(400, `Lab ${a.lab.code} has only ${a.seats} allocated seats`);
+    }
+    await LabAllocation.bulkWrite(body.labs.map((row) => ({ updateOne: { filter: { _id: row.allocation }, update: { $set: { present: row.present } } } })));
+    const fresh = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).lean();
+    present = fresh.reduce((n, a) => n + (a.present || 0), 0);
+    absent = shift.candidates - present;
+    if (absent < 0) throw new HttpError(400, `Present exceeds the ${shift.candidates} registered candidates`);
+  }
+  if (present == null || absent == null) throw new HttpError(400, 'Send present and absent counts or lab-wise attendance');
   if (present + absent !== shift.candidates) throw new HttpError(400, `Present + absent must equal the ${shift.candidates} registered candidates`);
   shift.attendance = { present, absent, recordedBy: req.user._id, recordedAt: new Date() };
   booking.timeline.push(event(req.user, 'attendance', `${shift.date} ${shift.startTime}: ${present} present, ${absent} absent`));

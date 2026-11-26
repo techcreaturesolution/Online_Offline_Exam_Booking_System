@@ -2,6 +2,7 @@ import { Lab, isBlocked, labMode, usableSeats } from '../models/Lab.js';
 import { LabAllocation } from '../models/LabAllocation.js';
 import { HttpError } from '../utils/httpError.js';
 import { overlaps, toMinutes } from '../utils/time.js';
+import { withLocks } from './locks.js';
 
 /** Peak seats already taken in each lab during a time window, ignoring one booking shift (the one being edited). */
 export function takenSeats(allocations, { startTime, endTime, ignore }) {
@@ -88,8 +89,46 @@ export function validatePlan(items, labs, shift) {
   return total;
 }
 
+/** First seat number where `seats` consecutive seats (1..usable) are not used by overlapping allocations. */
+export function firstFreeRange(existing, seats, usable) {
+  const ranges = existing.map((a) => [a.seatFrom || 1, (a.seatFrom || 1) + a.seats - 1]).sort((x, y) => x[0] - y[0]);
+  let start = 1;
+  for (const [from, to] of ranges) {
+    if (from - start >= seats) return start;
+    start = Math.max(start, to + 1);
+  }
+  return usable - start + 1 >= seats ? start : null;
+}
+
+/**
+ * Replaces the allocation of one exam shift (or mock day) under a center/date lock, so concurrent saves
+ * cannot overbook a lab, and gives each lab item its own seat-number range.
+ */
+export async function saveAllocation({ booking, shiftId, kind = 'exam', window, items, userId }) {
+  const ignore = { booking: booking._id, shiftId };
+  const center = booking.center?._id || booking.center;
+  return withLocks([`${center}:${window.date}`], async () => {
+    const labs = await availability({ center, date: window.date, startTime: window.startTime, endTime: window.endTime, mode: booking.mode, ignore });
+    const total = validatePlan(items, labs, window);
+    const others = (await LabAllocation.find({ center, date: window.date }).lean()).filter(
+      (a) => !(String(a.booking) === String(booking._id) && String(a.shiftId) === String(shiftId)) && overlaps(a.startTime, a.endTime, window.startTime, window.endTime),
+    );
+    const docs = items.map((it) => {
+      const lab = labs.find((l) => String(l._id) === String(it.lab));
+      const seatFrom = firstFreeRange(others.filter((a) => String(a.lab) === String(it.lab)), it.seats, lab.usable);
+      if (seatFrom == null) {
+        throw new HttpError(409, `Lab ${lab.code} has no continuous block of ${it.seats} seats free (seats are split by other exams); allocate fewer seats here or split across labs`);
+      }
+      return { ...ignore, kind, center, lab: it.lab, seats: it.seats, seatFrom, date: window.date, startTime: window.startTime, endTime: window.endTime, allocatedBy: userId };
+    });
+    await LabAllocation.deleteMany(ignore);
+    if (docs.length) await LabAllocation.insertMany(docs);
+    return { total, labs };
+  });
+}
+
 export async function allocationSummary(booking) {
-  const allocations = await LabAllocation.find({ booking: booking._id }).populate('lab', 'name code type floor').lean();
+  const allocations = await LabAllocation.find({ booking: booking._id, kind: { $ne: 'mock' } }).populate('lab', 'name code type floor').lean();
   const shifts = booking.shifts.map((s) => {
     const list = allocations.filter((a) => String(a.shiftId) === String(s._id));
     const seats = list.reduce((n, a) => n + a.seats, 0);

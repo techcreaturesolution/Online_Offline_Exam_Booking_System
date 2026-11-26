@@ -1,4 +1,4 @@
-/** Assigns candidates of each shift to the allocated labs in lab-code order, seat numbers like LAB1-001. */
+/** Assigns candidates of each shift to the allocated labs in lab-code order, using each allocation's seat range (LAB1-001...). */
 export function buildSeatPlan(candidates, allocations) {
   const updates = [];
   const byShift = new Map();
@@ -15,7 +15,8 @@ export function buildSeatPlan(candidates, allocations) {
     const ordered = [...list].sort((a, b) => a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true }));
     let i = 0;
     for (const slot of slots) {
-      for (let seat = 1; seat <= slot.seats && i < ordered.length; seat += 1, i += 1) {
+      const first = slot.seatFrom || 1;
+      for (let seat = first; seat < first + slot.seats && i < ordered.length; seat += 1, i += 1) {
         updates.push({ _id: ordered[i]._id, lab: slot.lab._id, seatNo: `${slot.lab.code}-${String(seat).padStart(3, '0')}` });
       }
     }

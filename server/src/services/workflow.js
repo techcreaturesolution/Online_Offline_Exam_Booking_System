@@ -1,4 +1,5 @@
 import { ROLES } from '../models/roles.js';
+import { todayIso } from '../utils/time.js';
 
 const same = (a, b) => a != null && b != null && String(a?._id || a) === String(b?._id || b);
 const inCenters = (user, booking) => (user.centers || []).some((c) => same(c, booking.center));
@@ -47,6 +48,9 @@ export function denyReason(action, user, booking, ctx = {}) {
   const admin = user.role === ROLES.SUPER_ADMIN;
   const status = booking.status;
   const online = booking.mode === 'online';
+  const today = ctx.today || todayIso();
+  const dates = booking.shifts.map((s) => s.date).sort();
+  const mock = booking.mock;
   switch (action) {
     case 'edit':
       if (!admin && !isOwnInstitute(user, booking)) return 'Only the booking institute can edit this booking';
@@ -81,10 +85,36 @@ export function denyReason(action, user, booking, ctx = {}) {
       if (!admin && !isAssignedAgency(user, booking) && !isCenterIncharge(user, booking)) return 'Only the assigned agency or Center In-Charge can start the exam';
       if (status !== 'ready') return 'All readiness checklists must be completed before the exam starts';
       if (!booking.agency) return 'Assign an exam conducting agency first';
+      if (today < dates[0]) return `The exam can be started only on its exam date (${dates[0]})`;
+      if (today > dates[dates.length - 1]) return `The exam dates have passed (last date ${dates[dates.length - 1]})`;
       return null;
     case 'attendance':
       if (!admin && !isAssignedAgency(user, booking) && !isCenterIncharge(user, booking)) return 'Only the agency or Center In-Charge records attendance';
       if (status !== 'in_progress') return 'Attendance is recorded while the exam is in progress';
+      if (!admin && !dates.includes(today)) return 'Attendance is recorded on the exam date';
+      return null;
+    case 'mockRequest':
+      if (!online) return 'Mock day is available for online exams';
+      if (!admin && !isOwnInstitute(user, booking) && !isAssignedAgency(user, booking)) return 'Only the institute or assigned agency requests a mock day';
+      if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
+      if (mock?.status === 'completed') return 'Mock day is already completed';
+      if (today >= dates[0]) return 'Mock day must be before the exam date';
+      return null;
+    case 'mockAllocate':
+      if (!online) return 'Mock day is available for online exams';
+      if (!admin && !isNetworkAdmin(user, booking)) return 'Only the Network Admin of this center allocates mock day labs';
+      if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
+      if (!mock || !['requested', 'allocated'].includes(mock.status)) return 'Mock day labs are allocated after a mock day is requested';
+      return null;
+    case 'mockPermission':
+      if (!admin && !isCenterVendor(user, booking, ctx.center)) return 'Only the Booking Vendor grants mock day lab permission';
+      if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
+      if (mock?.status !== 'allocated') return 'Mock day labs must be allocated before permission is granted';
+      return null;
+    case 'mockResult':
+      if (!admin && !isAssignedAgency(user, booking)) return 'Only the assigned agency records the mock day result';
+      if (mock?.status !== 'approved') return 'Mock day needs lab permission first';
+      if (today < mock.date) return `Mock day result can be recorded on or after ${mock.date}`;
       return null;
     case 'incident':
       if (!admin && !isAssignedAgency(user, booking) && !isCenterIncharge(user, booking) && !(online && isNetworkAdmin(user, booking))) {
@@ -123,6 +153,6 @@ export function denyReason(action, user, booking, ctx = {}) {
 }
 
 export function allowedActions(user, booking, ctx = {}) {
-  const actions = ['edit', 'allocate', 'review', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'candidates', 'seatPlan', 'feedback'];
+  const actions = ['edit', 'allocate', 'review', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'candidates', 'seatPlan', 'feedback', 'mockRequest', 'mockAllocate', 'mockPermission', 'mockResult'];
   return actions.filter((a) => denyReason(a, user, booking, ctx) === null);
 }
