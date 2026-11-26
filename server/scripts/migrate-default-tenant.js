@@ -28,6 +28,11 @@ const arg = (name, fallback) => {
 
 export async function migrateDefaultTenant({ slug = 'default', name = 'Default Organisation', ownerEmail, ownerPassword } = {}) {
   return asPlatform(async () => {
+    let owner = await User.findOne({ role: ROLES.PLATFORM_OWNER }).select('email').lean();
+    if (!owner && ownerEmail) {
+      if (!ownerPassword || ownerPassword.length < 8) throw new Error('Set PLATFORM_OWNER_PASSWORD (min 8 characters) to create the platform owner');
+      if (await User.exists({ email: ownerEmail.toLowerCase() })) throw new Error(`${ownerEmail} is already a tenant user; use another email for the platform owner`);
+    }
     const tenant = (await Tenant.findOne({ slug })) || (await Tenant.create({ name, slug, types: ['vendor', 'institute', 'agency'], status: 'active', plan: 'enterprise' }));
     const report = {};
     for (const Model of SCOPED) {
@@ -48,10 +53,7 @@ export async function migrateDefaultTenant({ slug = 'default', name = 'Default O
       await Model.collection.dropIndex(index).catch(() => {});
     }
     await Promise.all(SCOPED.map((m) => m.syncIndexes()));
-    let owner = await User.findOne({ role: ROLES.PLATFORM_OWNER }).select('email').lean();
     if (!owner && ownerEmail) {
-      if (!ownerPassword || ownerPassword.length < 8) throw new Error('Set PLATFORM_OWNER_PASSWORD (min 8 characters) to create the platform owner');
-      if (await User.exists({ email: ownerEmail.toLowerCase() })) throw new Error(`${ownerEmail} is already a tenant user; use another email for the platform owner`);
       owner = await User.create({ name: 'Platform Owner', email: ownerEmail, passwordHash: await bcrypt.hash(ownerPassword, 10), role: ROLES.PLATFORM_OWNER });
     }
     return { tenant: { _id: tenant._id, slug: tenant.slug }, migrated: report, platformOwner: owner?.email || 'none (pass --owner-email to create one)' };
