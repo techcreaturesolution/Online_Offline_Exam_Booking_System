@@ -4,7 +4,7 @@ import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { ROLE_LABELS } from '../lib/format.js';
 
-const ORG_ROLE = { institute_admin: 'institute', booking_vendor: 'vendor', exam_agency: 'agency' };
+const ORG_ROLE = { institute_admin: 'institute', exam_agency: 'agency' };
 const CENTER_ROLES = ['network_admin', 'center_incharge'];
 const blankUser = { name: '', email: '', phone: '', role: 'institute_admin', organization: '', centers: [], password: '' };
 
@@ -74,7 +74,7 @@ function OrgForm({ onDone }) {
     <form onSubmit={submit} className="card grid gap-3 md:grid-cols-4">
       <h2 className="h2 md:col-span-4">Add organization</h2>
       <div className="md:col-span-4"><Alert>{error}</Alert></div>
-      <div><label className="label">Kind</label><select className="input" value={f.kind} onChange={set('kind')}><option value="institute">University / Institute</option><option value="vendor">Booking vendor</option><option value="agency">Exam conducting agency</option></select></div>
+      <div><label className="label">Kind</label><select className="input" value={f.kind} onChange={set('kind')}><option value="institute">University / Institute</option><option value="agency">Exam conducting agency</option></select></div>
       <div className="md:col-span-2"><label className="label">Name</label><input className="input" value={f.name} onChange={set('name')} required /></div>
       <div><label className="label">Code</label><input className="input" value={f.code} onChange={set('code')} /></div>
       {f.kind === 'institute' && <div><label className="label">Type</label><select className="input" value={f.type} onChange={set('type')}>{['university', 'institute', 'college', 'board', 'recruiter', 'company', 'other'].map((t) => <option key={t}>{t}</option>)}</select></div>}

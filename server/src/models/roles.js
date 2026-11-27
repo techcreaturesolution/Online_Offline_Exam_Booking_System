@@ -2,7 +2,6 @@ export const ROLES = {
   PLATFORM_OWNER: 'platform_owner',
   SUPER_ADMIN: 'super_admin',
   INSTITUTE: 'institute_admin',
-  VENDOR: 'booking_vendor',
   NETWORK: 'network_admin',
   CENTER: 'center_incharge',
   AGENCY: 'exam_agency',
@@ -15,7 +14,6 @@ export const ROLE_LABELS = {
   platform_owner: 'Platform Owner',
   super_admin: 'Super Admin',
   institute_admin: 'University / Institute',
-  booking_vendor: 'Booking Vendor',
   network_admin: 'Network Admin',
   center_incharge: 'Center In-Charge',
   exam_agency: 'Exam Conducting Agency',
@@ -23,7 +21,7 @@ export const ROLE_LABELS = {
 
 export const MODES = ['online', 'offline'];
 
-export const BOOKING_STATUSES = ['requested', 'allocated', 'confirmed', 'ready', 'in_progress', 'completed', 'cancelled'];
+export const BOOKING_STATUSES = ['requested', 'confirmed', 'ready', 'in_progress', 'completed', 'cancelled'];
 
 export const NETWORK_CHECKLIST = [
   { key: 'lan', label: 'LAN / switches tested on every allocated system' },

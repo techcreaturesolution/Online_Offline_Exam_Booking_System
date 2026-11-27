@@ -39,7 +39,7 @@ export default function Bookings() {
         <h1 className="h1">{user.role === 'exam_agency' ? 'Assigned exams' : 'Exam bookings'}</h1>
         <div className="flex gap-2">
           <button className="btn-secondary" onClick={() => downloadCsv(`/bookings/export.csv?${query}`, 'bookings.csv').catch((e) => setError(errorMessage(e)))}>Export CSV</button>
-          {['institute_admin', 'super_admin'].includes(user.role) && <Link to="/bookings/new" className="btn-primary">+ New booking</Link>}
+          {['exam_agency', 'super_admin'].includes(user.role) && <Link to="/bookings/new" className="btn-primary">+ Create exam</Link>}
         </div>
       </div>
       <div className="card grid gap-3 md:grid-cols-6">

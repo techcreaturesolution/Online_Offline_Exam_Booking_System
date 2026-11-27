@@ -44,7 +44,7 @@ export default function App() {
       <Route element={<Private><Layout /></Private>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/bookings" element={<Bookings />} />
-        <Route path="/bookings/new" element={<Private roles={['institute_admin', 'super_admin']}><NewBooking /></Private>} />
+        <Route path="/bookings/new" element={<Private roles={['exam_agency', 'super_admin']}><NewBooking /></Private>} />
         <Route path="/bookings/:id" element={<BookingDetail />} />
         <Route path="/centers" element={<Centers />} />
         <Route path="/centers/:id" element={<CenterDetail />} />

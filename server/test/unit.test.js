@@ -4,13 +4,12 @@ import { usableSeats } from '../src/models/Lab.js';
 import { firstFreeRange, suggestPlan, takenSeats, validatePlan } from '../src/services/allocation.js';
 import { attendanceCounts } from '../src/services/counts.js';
 import { bookingCounts, computeUtilization } from '../src/services/utilization.js';
-import { allocatorRole, denyReason, reviewerRole } from '../src/services/workflow.js';
+import { allocatorRole, denyReason } from '../src/services/workflow.js';
 import { parseCsv, toCsv } from '../src/utils/csv.js';
 import { overlaps } from '../src/utils/time.js';
 
 const C = 'c'.repeat(24);
 const I = 'i'.repeat(24);
-const V = 'v'.repeat(24);
 const A = 'a'.repeat(24);
 const user = (role, extra = {}) => ({ _id: 'u', role, centers: [], organization: null, ...extra });
 const booking = (extra = {}) => ({ mode: 'online', status: 'requested', center: C, institute: I, agency: A, shifts: [{ candidates: 10, attendance: { present: null } }], ...extra });
@@ -26,11 +25,9 @@ test('usable seats respect working systems and buffer seats', () => {
   assert.equal(usableSeats({ type: 'exam_hall', capacity: 200, systemsWorking: 0, bufferSeats: 10 }), 190);
 });
 
-test('online labs are allocated by the Network Admin and verified by the Booking Vendor', () => {
+test('online labs are allocated by the Network Admin, offline classrooms by the Center In-Charge', () => {
   assert.equal(allocatorRole('online'), 'network_admin');
-  assert.equal(reviewerRole('online'), 'booking_vendor');
   assert.equal(allocatorRole('offline'), 'center_incharge');
-  assert.equal(reviewerRole('offline'), 'institute_admin');
   const net = user('network_admin', { centers: [C] });
   const inch = user('center_incharge', { centers: [C] });
   assert.equal(denyReason('allocate', net, booking()), null);
@@ -38,18 +35,21 @@ test('online labs are allocated by the Network Admin and verified by the Booking
   assert.equal(denyReason('allocate', inch, booking({ mode: 'offline' })), null);
   assert.match(denyReason('allocate', net, booking({ mode: 'offline' })), /Center In-Charge/);
   assert.match(denyReason('allocate', user('network_admin', { centers: ['x'.repeat(24)] }), booking()), /Network Admin/);
-  assert.match(denyReason('allocate', net, booking({ status: 'confirmed' })), /locked/);
+  assert.equal(denyReason('allocate', net, booking({ status: 'confirmed' })), null, 'allocation can be adjusted until the center is ready');
+  assert.match(denyReason('allocate', net, booking({ status: 'ready' })), /locked/);
 });
 
-test('only the center vendor reviews online allocations; the institute reviews offline ones', () => {
-  const vendor = user('booking_vendor', { organization: V });
-  const center = { vendor: V };
-  assert.equal(denyReason('review', vendor, booking({ status: 'allocated' }), { center }), null);
-  assert.match(denyReason('review', vendor, booking({ status: 'allocated' }), { center: { vendor: 'z'.repeat(24) } }), /Booking Vendor/);
-  assert.match(denyReason('review', vendor, booking({ status: 'requested' }), { center }), /completed/);
+test('the exam agency that created an exam edits, cancels and bills it; the institute only views', () => {
+  const agency = user('exam_agency', { organization: A });
+  const other = user('exam_agency', { organization: 'z'.repeat(24) });
   const inst = user('institute_admin', { organization: I });
-  assert.equal(denyReason('review', inst, booking({ status: 'allocated', mode: 'offline' })), null);
-  assert.match(denyReason('review', inst, booking({ status: 'allocated' })), /Booking Vendor/);
+  for (const action of ['edit', 'cancel', 'billing', 'mockRequest']) {
+    assert.equal(denyReason(action, agency, booking()), null, action);
+    assert.match(denyReason(action, other, booking()), /agency/i, action);
+    assert.match(denyReason(action, inst, booking()), /agency/i, action);
+  }
+  assert.match(denyReason('assignAgency', agency, booking()), /Super Admin/);
+  assert.equal(denyReason('mockPermission', agency, booking()), 'Unknown action');
 });
 
 test('readiness, start and completion follow the role and status rules', () => {
@@ -62,7 +62,7 @@ test('readiness, start and completion follow the role and status rules', () => {
   assert.match(denyReason('start', agency, booking({ status: 'ready', agency: 'z'.repeat(24) })), /agency/);
   assert.match(denyReason('complete', agency, booking({ status: 'in_progress' })), /attendance/);
   assert.equal(denyReason('complete', agency, booking({ status: 'in_progress', shifts: [{ candidates: 10, attendance: { present: 9 } }] })), null);
-  assert.match(denyReason('cancel', agency, booking()), /institute/);
+  assert.match(denyReason('cancel', user('institute_admin', { organization: I }), booking()), /agency/);
 });
 
 test('takenSeats counts overlapping allocations and ignores the shift being edited', () => {

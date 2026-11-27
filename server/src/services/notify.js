@@ -1,6 +1,5 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
-import { Center } from '../models/Center.js';
 import { Notification } from '../models/Notification.js';
 import { ROLES } from '../models/roles.js';
 import { User } from '../models/User.js';
@@ -12,16 +11,14 @@ function mailer() {
   return transport;
 }
 
-/** Everyone who works on a booking: institute, center staff (network admin only for online), vendor, agency, super admins. */
+/** Everyone who works on a booking: institute, center staff (network admin only for online), agency, super admins. */
 export async function bookingAudience(booking) {
-  const center = await Center.findById(booking.center).select('vendor').lean();
   const or = [
     { role: ROLES.SUPER_ADMIN },
     { role: ROLES.INSTITUTE, organization: booking.institute },
     { role: ROLES.CENTER, centers: booking.center },
   ];
   if (booking.mode === 'online') or.push({ role: ROLES.NETWORK, centers: booking.center });
-  if (center?.vendor) or.push({ role: ROLES.VENDOR, organization: center.vendor });
   if (booking.agency) or.push({ role: ROLES.AGENCY, organization: booking.agency });
   return User.find({ status: 'active', $or: or }).select('_id email role').lean();
 }

@@ -4,14 +4,12 @@ import { Alert, Empty, Spinner } from '../components/ui.jsx';
 import { api, errorMessage } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 
-const blank = { name: '', code: '', city: '', state: '', address: '', pincode: '', modes: ['online'], openTime: '08:00', closeTime: '20:00', ratePerSeat: { online: 0, offline: 0 }, vendor: '', facilities: '' };
+const blank = { name: '', code: '', city: '', state: '', address: '', pincode: '', modes: ['online'], openTime: '08:00', closeTime: '20:00', ratePerSeat: { online: 0, offline: 0 }, facilities: '' };
 
 function CenterForm({ onCreated }) {
   const [f, setF] = useState(blank);
-  const [vendors, setVendors] = useState([]);
   const [error, setError] = useState('');
   useEffect(() => {
-    api.get('/admin/organizations?kind=vendor').then((r) => setVendors(r.data.organizations));
   }, []);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const toggle = (m) => setF({ ...f, modes: f.modes.includes(m) ? f.modes.filter((x) => x !== m) : [...f.modes, m] });
@@ -19,7 +17,7 @@ function CenterForm({ onCreated }) {
     e.preventDefault();
     setError('');
     try {
-      await api.post('/centers', { ...f, vendor: f.vendor || null, facilities: f.facilities.split(',').map((s) => s.trim()).filter(Boolean), ratePerSeat: { online: Number(f.ratePerSeat.online), offline: Number(f.ratePerSeat.offline) } });
+      await api.post('/centers', { ...f, facilities: f.facilities.split(',').map((s) => s.trim()).filter(Boolean), ratePerSeat: { online: Number(f.ratePerSeat.online), offline: Number(f.ratePerSeat.offline) } });
       setF(blank);
       onCreated();
     } catch (err) {
@@ -32,9 +30,6 @@ function CenterForm({ onCreated }) {
       <div className="md:col-span-4"><Alert>{error}</Alert></div>
       <div className="md:col-span-2"><label className="label">Name</label><input className="input" value={f.name} onChange={set('name')} required /></div>
       <div><label className="label">Code</label><input className="input" value={f.code} onChange={set('code')} required /></div>
-      <div><label className="label">Booking vendor</label>
-        <select className="input" value={f.vendor} onChange={set('vendor')}><option value="">None</option>{vendors.map((v) => <option key={v._id} value={v._id}>{v.name}</option>)}</select>
-      </div>
       <div className="md:col-span-2"><label className="label">Address</label><input className="input" value={f.address} onChange={set('address')} /></div>
       <div><label className="label">City</label><input className="input" value={f.city} onChange={set('city')} required /></div>
       <div><label className="label">State</label><input className="input" value={f.state} onChange={set('state')} required /></div>

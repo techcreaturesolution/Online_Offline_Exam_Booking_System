@@ -52,22 +52,28 @@ async function api(who, method, path, body) {
   return { status: r.status, data };
 }
 
+async function instituteId(code) {
+  const { data } = await api('agency', 'GET', '/meta/institutes');
+  return data.institutes.find((i) => i.code === code)._id;
+}
+
 async function centerByCode(code) {
   const { data } = await api('admin', 'GET', '/centers');
   return data.centers.find((c) => c.code === code);
 }
 
-test('online exam: institute books, network admin allocates, vendor verifies, center gets ready, agency conducts', async (t) => {
+test('online exam: agency creates, network admin allocates, center gets ready, agency conducts', async (t) => {
   if (skip) return t.skip('MongoDB not reachable');
   const ahm = await centerByCode('AHM01');
-  const { data: meta } = await api('university', 'GET', '/meta/agencies');
-  const agency = meta.agencies.find((a) => a.code === 'EDUSEC');
+  const gstu = await instituteId('GSTU');
   const date = todayIso();
-  const created = await api('university', 'POST', '/bookings', {
-    center: ahm._id, examName: 'API Flow Online Exam', mode: 'online', agency: agency._id,
-    shifts: [{ label: 'Morning', date, startTime: '09:00', endTime: '11:00', candidates: 150 }],
-  });
+  const body = { institute: gstu, center: ahm._id, examName: 'API Flow Online Exam', mode: 'online', shifts: [{ label: 'Morning', date, startTime: '09:00', endTime: '11:00', candidates: 150 }] };
+  assert.equal((await api('university', 'POST', '/bookings', body)).status, 403, 'institutes no longer create exams');
+  assert.equal((await api('agency', 'POST', '/bookings', { ...body, institute: undefined })).status, 400, 'the agency picks the institute');
+  const created = await api('agency', 'POST', '/bookings', body);
   assert.equal(created.status, 201, JSON.stringify(created.data));
+  const { data: meta } = await api('agency', 'GET', '/meta/agencies');
+  assert.equal(created.data.booking.agency, meta.agencies.find((a) => a.code === 'EDUSEC')._id, 'creating agency conducts the exam');
   const id = created.data.booking._id;
   const shiftId = created.data.booking.shifts[0]._id;
   assert.equal(created.data.booking.billing.amount, 150 * 450);
@@ -87,14 +93,12 @@ test('online exam: institute books, network admin allocates, vendor verifies, ce
   assert.equal(partial.data.status, 'requested');
   const alloc = await api('network', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: suggest.data.items });
   assert.equal(alloc.status, 200, JSON.stringify(alloc.data));
-  assert.equal(alloc.data.status, 'allocated');
-
-  assert.equal((await api('university', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).status, 403, 'institute does not verify online allocation');
-  const changes = await api('vendor', 'POST', `/bookings/${id}/review`, { decision: 'changes_requested', note: 'Use Lab B for 40 seats' });
-  assert.equal(changes.data.booking.status, 'requested');
-  await api('network', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: suggest.data.items });
-  const approved = await api('vendor', 'POST', `/bookings/${id}/review`, { decision: 'approved' });
-  assert.equal(approved.data.booking.status, 'confirmed');
+  assert.equal(alloc.data.status, 'confirmed', 'full allocation confirms the exam without a verification step');
+  assert.equal((await api('network', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).status, 404);
+  for (const who of ['university', 'agency', 'center', 'admin']) {
+    const seen = await api(who, 'GET', `/bookings/${id}`);
+    assert.equal(seen.data.allocation.totalSeats, 150, `${who} sees the lab allocation`);
+  }
 
   const { data: detail } = await api('network', 'GET', `/bookings/${id}`);
   const all = (list) => Object.fromEntries(list.map((c) => [c.key, true]));
@@ -134,12 +138,12 @@ test('lab conflicts: a second booking cannot take seats already allocated in an 
   const srt = await centerByCode('SRT01');
   const date = addDays(todayIso(), 25);
   const mk = async (who, startTime, endTime, candidates) => {
-    const r = await api(who, 'POST', '/bookings', { center: srt._id, examName: `Conflict ${startTime}`, mode: 'online', shifts: [{ date, startTime, endTime, candidates }] });
+    const r = await api(who, 'POST', '/bookings', { institute: await instituteId('SIM'), center: srt._id, examName: `Conflict ${startTime}`, mode: 'online', shifts: [{ date, startTime, endTime, candidates }] });
     return { id: r.data.booking._id, shiftId: r.data.booking.shifts[0]._id };
   };
-  const a = await mk('university', '09:00', '11:00', 140);
-  const b = await mk('institute', '10:00', '12:00', 140);
-  const c = await mk('institute', '11:00', '13:00', 140);
+  const a = await mk('agency', '09:00', '11:00', 140);
+  const b = await mk('agency2', '10:00', '12:00', 140);
+  const c = await mk('agency2', '11:00', '13:00', 140);
   const lab1 = (await api('network', 'GET', `/centers/${srt._id}/availability?date=${date}&startTime=09:00&endTime=11:00`)).data.labs.find((l) => l.code === 'S-LAB1');
   assert.equal(lab1.free, 140);
   assert.equal((await api('network', 'PUT', `/bookings/${a.id}/allocations/${a.shiftId}`, { items: [{ lab: lab1._id, seats: 140 }] })).status, 200);
@@ -147,27 +151,30 @@ test('lab conflicts: a second booking cannot take seats already allocated in an 
   assert.equal(clash.status, 409);
   assert.match(clash.data.error, /only 0 free seats/);
   assert.equal((await api('network', 'PUT', `/bookings/${c.id}/allocations/${c.shiftId}`, { items: [{ lab: lab1._id, seats: 140 }] })).status, 200, 'back-to-back shift is free');
-  await api('university', 'POST', `/bookings/${a.id}/cancel`, { reason: 'Postponed' });
+  assert.equal((await api('institute', 'POST', `/bookings/${a.id}/cancel`, { reason: 'Postponed' })).status, 403, 'institutes cannot cancel');
+  await api('agency', 'POST', `/bookings/${a.id}/cancel`, { reason: 'Postponed' });
   assert.equal((await api('network', 'PUT', `/bookings/${b.id}/allocations/${b.shiftId}`, { items: [{ lab: lab1._id, seats: 140 }] })).status, 409, 'still overlaps the 11:00 shift');
-  assert.equal((await api('university', 'POST', `/bookings/${c.id}/cancel`, { reason: 'Postponed' })).status, 404, 'other institutes cannot see or cancel it');
-  await api('institute', 'POST', `/bookings/${c.id}/cancel`, { reason: 'Postponed' });
+  assert.equal((await api('agency', 'POST', `/bookings/${c.id}/cancel`, { reason: 'Postponed' })).status, 404, 'other agencies cannot see or cancel it');
+  await api('agency2', 'POST', `/bookings/${c.id}/cancel`, { reason: 'Postponed' });
   assert.equal((await api('network', 'PUT', `/bookings/${b.id}/allocations/${b.shiftId}`, { items: [{ lab: lab1._id, seats: 140 }] })).status, 200, 'cancel releases seats');
 });
 
-test('offline exam: center in-charge allocates halls and the institute verifies', async (t) => {
+test('offline exam: center in-charge allocates classrooms and the exam is confirmed', async (t) => {
   if (skip) return t.skip('MongoDB not reachable');
   const vad = await centerByCode('VAD01');
+  const institute = await instituteId('GSTU');
   const date = addDays(todayIso(), 15);
-  assert.equal((await api('university', 'POST', '/bookings', { center: vad._id, examName: 'Online at offline center', mode: 'online', shifts: [{ date, startTime: '10:00', endTime: '12:00', candidates: 5 }] })).status, 400);
-  const r = await api('university', 'POST', '/bookings', { center: vad._id, examName: 'Offline API Exam', mode: 'offline', shifts: [{ label: 'P1', date, startTime: '10:00', endTime: '12:00', candidates: 3 }] });
+  assert.equal((await api('agency', 'POST', '/bookings', { institute, center: vad._id, examName: 'Online at offline center', mode: 'online', shifts: [{ date, startTime: '10:00', endTime: '12:00', candidates: 5 }] })).status, 400);
+  const r = await api('agency', 'POST', '/bookings', { institute, center: vad._id, examName: 'Offline API Exam', mode: 'offline', shifts: [{ label: 'P1', date, startTime: '10:00', endTime: '12:00', candidates: 3 }] });
   const id = r.data.booking._id;
   const shiftId = r.data.booking.shifts[0]._id;
   assert.equal((await api('network', 'GET', `/bookings/${id}`)).status, 404, 'network admin does not see offline bookings');
   const sug = await api('center2', 'GET', `/bookings/${id}/allocations/suggest?shiftId=${shiftId}`);
   assert.equal(sug.data.labs.every((l) => l.mode === 'offline'), true);
-  assert.equal((await api('center2', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: sug.data.items })).data.status, 'allocated');
-  assert.equal((await api('vendor', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).status, 403);
-  assert.equal((await api('university', 'POST', `/bookings/${id}/review`, { decision: 'approved' })).data.booking.status, 'confirmed');
+  assert.equal((await api('agency', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: sug.data.items })).status, 403);
+  assert.equal((await api('center2', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: sug.data.items })).data.status, 'confirmed');
+  const seen = await api('university', 'GET', `/bookings/${id}`);
+  assert.equal(seen.data.allocation.totalSeats, 3, 'the institute sees the classroom allocation');
 });
 
 test('reports: dashboard counts and utilization are scoped by role', async (t) => {
@@ -181,7 +188,7 @@ test('reports: dashboard counts and utilization are scoped by role', async (t) =
   assert.ok(util.data.totals.allocatedSeatHours > 0);
   const net = await api('network', 'GET', '/reports/utilization');
   assert.equal(net.data.labs.every((l) => l.type === 'computer_lab'), true);
-  const csv = await api('vendor', 'GET', '/reports/utilization.csv');
+  const csv = await api('center', 'GET', '/reports/utilization.csv');
   assert.match(csv.data, /^Center,Lab Code/);
 });
 
@@ -196,25 +203,24 @@ test('admin manages users; institutes self-register and wait for approval', asyn
   assert.equal((await api('admin', 'PUT', `/admin/users/${pending._id}`, { status: 'active' })).status, 200);
   const ok = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reg@newuni.test', password: 'Secret@123' }) });
   assert.equal(ok.status, 200);
-  assert.equal((await api('vendor', 'GET', '/admin/users')).status, 403);
+  assert.equal((await api('agency', 'GET', '/admin/users')).status, 403);
   const noCenter = await api('admin', 'POST', '/admin/users', { name: 'Net Two', email: 'net2@examhub.test', role: 'network_admin', password: 'Secret@123' });
   assert.equal(noCenter.status, 400);
 });
 
-test('mock day: agency requests, network admin allocates, vendor permits, agency records the result', async (t) => {
+test('mock day: agency requests, network admin allocates, agency records the result', async (t) => {
   if (skip) return t.skip('MongoDB not reachable');
   const ahm = await centerByCode('AHM01');
-  const { data: meta } = await api('university', 'GET', '/meta/agencies');
-  const agency = meta.agencies.find((a) => a.code === 'EDUSEC');
   const examDate = addDays(todayIso(), 9);
-  const created = await api('university', 'POST', '/bookings', {
-    center: ahm._id, examName: 'Mock Flow Online Exam', mode: 'online', agency: agency._id,
+  const created = await api('agency', 'POST', '/bookings', {
+    institute: await instituteId('GSTU'), center: ahm._id, examName: 'Mock Flow Online Exam', mode: 'online',
     shifts: [{ date: examDate, startTime: '09:00', endTime: '11:00', candidates: 50 }],
   });
   const id = created.data.booking._id;
   const mock = { date: todayIso(), startTime: '15:00', endTime: '16:00', candidates: 50 };
-  assert.equal((await api('university', 'PUT', `/bookings/${id}/mock`, { ...mock, date: examDate })).status, 400, 'mock day must be before the exam date');
-  assert.equal((await api('university', 'PUT', `/bookings/${id}/mock`, { ...mock, candidates: 51 })).status, 400);
+  assert.equal((await api('agency', 'PUT', `/bookings/${id}/mock`, { ...mock, date: examDate })).status, 400, 'mock day must be before the exam date');
+  assert.equal((await api('agency', 'PUT', `/bookings/${id}/mock`, { ...mock, candidates: 51 })).status, 400);
+  assert.equal((await api('university', 'PUT', `/bookings/${id}/mock`, mock)).status, 403);
   assert.equal((await api('network', 'PUT', `/bookings/${id}/mock`, mock)).status, 403);
   const req = await api('agency', 'PUT', `/bookings/${id}/mock`, mock);
   assert.equal(req.status, 200, JSON.stringify(req.data));
@@ -223,14 +229,10 @@ test('mock day: agency requests, network admin allocates, vendor permits, agency
   assert.equal((await api('agency', 'GET', `/bookings/${id}/mock/suggest`)).status, 403, 'only the network admin allocates');
   const suggest = await api('network', 'GET', `/bookings/${id}/mock/suggest`);
   assert.equal(suggest.data.shortfall, 0);
-  assert.equal((await api('vendor', 'POST', `/bookings/${id}/mock/permission`, { decision: 'approved' })).status, 403, 'permission needs allocation first');
+  assert.equal((await api('agency', 'POST', `/bookings/${id}/mock/result`, { present: 1 })).status, 403, 'result needs lab allocation first');
   const alloc = await api('network', 'PUT', `/bookings/${id}/mock/allocation`, { items: suggest.data.items });
   assert.equal(alloc.status, 200, JSON.stringify(alloc.data));
-  assert.equal(alloc.data.booking.mock.status, 'allocated');
-  assert.equal((await api('network', 'POST', `/bookings/${id}/mock/permission`, { decision: 'approved' })).status, 403);
-  assert.equal((await api('vendor', 'POST', `/bookings/${id}/mock/permission`, { decision: 'rejected' })).status, 400, 'rejection needs a note');
-  const permit = await api('vendor', 'POST', `/bookings/${id}/mock/permission`, { decision: 'approved', note: 'Lab open from 14:30' });
-  assert.equal(permit.data.booking.mock.status, 'approved');
+  assert.equal(alloc.data.booking.mock.status, 'approved', 'allocated mock labs need no separate permission');
 
   const { data: detail } = await api('agency', 'GET', `/bookings/${id}`);
   assert.equal(detail.mockAllocations.length, suggest.data.items.length);
@@ -258,16 +260,16 @@ test('simultaneous allocation saves cannot overbook a lab, and overlapping exams
   const srt = await centerByCode('SRT01');
   const date = addDays(todayIso(), 30);
   const mk = async (who, startTime, endTime, candidates) => {
-    const r = await api(who, 'POST', '/bookings', { center: srt._id, examName: `Race ${startTime}`, mode: 'online', shifts: [{ date, startTime, endTime, candidates }] });
+    const r = await api(who, 'POST', '/bookings', { institute: await instituteId('GSTU'), center: srt._id, examName: `Race ${startTime}`, mode: 'online', shifts: [{ date, startTime, endTime, candidates }] });
     return { id: r.data.booking._id, shiftId: r.data.booking.shifts[0]._id };
   };
-  const a = await mk('university', '09:00', '11:00', 100);
-  const b = await mk('institute', '09:00', '11:00', 100);
+  const a = await mk('agency', '09:00', '11:00', 100);
+  const b = await mk('agency2', '09:00', '11:00', 100);
   const lab1 = (await api('network', 'GET', `/centers/${srt._id}/availability?date=${date}&startTime=09:00&endTime=11:00`)).data.labs.find((l) => l.code === 'S-LAB1');
   const results = await Promise.all([a, b].map((x) => api('network', 'PUT', `/bookings/${x.id}/allocations/${x.shiftId}`, { items: [{ lab: lab1._id, seats: 100 }] })));
   assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
 
-  const c = await mk('institute', '10:00', '12:00', 30);
+  const c = await mk('agency2', '10:00', '12:00', 30);
   assert.equal((await api('network', 'PUT', `/bookings/${c.id}/allocations/${c.shiftId}`, { items: [{ lab: lab1._id, seats: 30 }] })).status, 200);
   const plan = await api('network', 'GET', `/reports/planning?from=${date}&to=${date}`);
   const rows = plan.data.rows.filter((r) => r.lab.code === 'S-LAB1').sort((x, y) => x.seatFrom - y.seatFrom);

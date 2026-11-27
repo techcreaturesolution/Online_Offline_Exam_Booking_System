@@ -8,22 +8,21 @@ MERN platform (MongoDB, Express, React, Node) where universities and institutes 
 | --- | --- |
 | Platform Owner | Runs the SaaS: lists every organisation (tenant) with usage, changes plan, suspends/reactivates, opens an audited 30-minute support session as the tenant's admin |
 | Super Admin | Tenant admin: manages centers, labs, organizations and users of its own organisation; approves institute sign-ups; edits branding/settings, exports data, reads the audit log |
-| University / Institute | Requests bookings with candidate counts, verifies **offline** hall allocation, tracks status/counts/utilization, rates the center |
-| Booking Vendor | Owns centers commercially; **verifies the Network Admin's lab allocation** for online exams, assigns agency, manages billing |
+| University / Institute | Sees its exams: status, lab/classroom allocation, candidate counts, attendance and utilization; rates the center |
 | Network Admin | **Allocates computer labs** for online exams, manages computer labs, completes the network checklist |
 | Center In-Charge | **Allocates exam halls/classrooms** for offline exams, manages halls, completes the center checklist, records attendance |
-| Exam Conducting Agency | Starts assigned exams, records attendance and incidents, marks exams completed |
+| Exam Conducting Agency | **Creates exams** (institute, center, mode, dates/shifts, candidate count), requests mock days, manages billing, starts exams, records attendance and incidents, marks exams completed |
 
 ## Workflow
 
 ```
-Online : Institute requests → Network Admin allocates labs → Booking Vendor verifies
+Online : Agency creates exam → Network Admin allocates labs (confirmed)
          → Network + Center checklists → Agency starts → attendance → Agency completes
-Offline: Institute requests → Center In-Charge allocates halls → Institute verifies
+Offline: Agency creates exam → Center In-Charge allocates classrooms (confirmed)
          → Center checklist (incl. strong room, answer sheets) → Agency starts → attendance → completes
 ```
 
-Statuses: `requested → allocated → confirmed → ready → in_progress → completed` (or `cancelled`). A reviewer can request changes, which sends the booking back to `requested`.
+Statuses: `requested → confirmed → ready → in_progress → completed` (or `cancelled`). A complete allocation confirms the exam directly; there is no separate verification step. The institute, agency, Network Admin, Center In-Charge and Super Admin all see the exam and its allocation.
 
 ## Features
 
@@ -34,7 +33,7 @@ Statuses: `requested → allocated → confirmed → ready → in_progress → c
 - Readiness checklists (network for online; center + strong room/answer sheets for offline)
 - Candidate counts only: total candidates per shift at booking; on exam day present / absent per classroom, rolled up per block (Lab **Block** field) and per center (booking page and **Attendance counts** page, `GET /api/reports/attendance?date=`)
 - Exam start and attendance only on the exam date; lab-wise attendance recorded by the exam agency
-- Mock day for online exams: institute or agency requests a date before the exam, the Network Admin allocates labs, the Booking Vendor grants lab permission, and the agency records the mock result
+- Mock day for online exams: the agency requests a date before the exam, the Network Admin allocates labs (approved directly), and the agency records the mock result
 - Lab planning view with seat ranges per lab for exam shifts and mock days; overlapping exams in one lab get separate seat numbers
 - Allocation saves are serialised per center and date, so simultaneous saves cannot overbook a lab
 - User directory for the exam agency (all active users except Super Admins)
@@ -55,7 +54,7 @@ npm run dev:server                # API on http://localhost:5000
 npm run dev:client                # web on http://localhost:5173 (proxies /api)
 ```
 
-Demo logins (password `Demo@1234`): `admin@`, `university@`, `institute@`, `vendor@`, `network@`, `center@`, `center2@`, `agency@`, `agency2@` – all `@examhub.test`, in tenant `default`. A second tenant `acme` has `admin@acme.test`, and `owner@examhub.test` is the Platform Owner.
+Demo logins (password `Demo@1234`): `admin@`, `university@`, `institute@`, `network@`, `center@`, `center2@`, `agency@`, `agency2@` – all `@examhub.test`, in tenant `default`. A second tenant `acme` has `admin@acme.test`, and `owner@examhub.test` is the Platform Owner.
 
 ### Multi-tenancy
 

@@ -55,14 +55,12 @@ async function validateBookingInput(body, user) {
       throw new HttpError(400, `Shift ${s.date} ${s.startTime}-${s.endTime} is outside center hours ${center.openTime}-${center.closeTime}`);
     }
   }
-  if (body.agency && !(await Organization.exists({ _id: body.agency, kind: 'agency', active: true }))) throw new HttpError(400, 'Agency not found');
-  let institute = user.organization;
-  if (user.role === ROLES.SUPER_ADMIN) {
-    if (!body.institute) throw new HttpError(400, 'Select the institute for this booking');
-    institute = body.institute;
-  }
-  if (!(await Organization.exists({ _id: institute, kind: 'institute' }))) throw new HttpError(400, 'Institute not found');
-  return { center, institute };
+  const agency = user.role === ROLES.AGENCY ? user.organization : body.agency || null;
+  if (user.role === ROLES.AGENCY && !agency) throw new HttpError(400, 'Your account is not linked to an exam conducting agency');
+  if (agency && !(await Organization.exists({ _id: agency, kind: 'agency', active: true }))) throw new HttpError(400, 'Agency not found');
+  if (!body.institute) throw new HttpError(400, 'Select the university / institute for this exam');
+  if (!(await Organization.exists({ _id: body.institute, kind: 'institute' }))) throw new HttpError(400, 'Institute not found');
+  return { center, institute: body.institute, agency };
 }
 
 function billingFor(center, mode, shifts) {
@@ -140,21 +138,21 @@ router.get('/export.csv', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  if (![ROLES.INSTITUTE, ROLES.SUPER_ADMIN].includes(req.user.role)) throw new HttpError(403, 'Only a University / Institute can request an exam booking');
+  if (![ROLES.AGENCY, ROLES.SUPER_ADMIN].includes(req.user.role)) throw new HttpError(403, 'Only the Exam Conducting Agency creates exams');
   const body = bookingSchema.parse(req.body);
-  const { center, institute } = await validateBookingInput(body, req.user);
+  const { center, institute, agency } = await validateBookingInput(body, req.user);
   const year = new Date().getFullYear();
   const booking = await Booking.create({
     ...body,
     institute,
-    agency: body.agency || null,
+    agency,
     bookingNo: `EB-${year}-${String(await nextSeq(`booking-${year}`)).padStart(5, '0')}`,
     billing: billingFor(center, body.mode, body.shifts),
     createdBy: req.user._id,
-    timeline: [event(req.user, 'requested', `${body.mode} exam, ${body.shifts.length} shift(s)`)],
+    timeline: [event(req.user, 'requested', `${body.mode} exam, ${body.shifts.length} shift(s), ${body.shifts.reduce((n, s) => n + s.candidates, 0)} candidates`)],
   });
   const allocator = body.mode === 'online' ? 'Network Admin' : 'Center In-Charge';
-  await notifyBooking(booking, `New ${body.mode} exam booking ${booking.bookingNo}`, `${body.examName} at ${center.name} needs lab allocation by the ${allocator}.`, { exclude: req.user._id });
+  await notifyBooking(booking, `New ${body.mode} exam ${booking.bookingNo}`, `${body.examName} at ${center.name} needs ${body.mode === 'online' ? 'lab' : 'classroom'} allocation by the ${allocator}.`, { exclude: req.user._id });
   res.status(201).json({ booking });
 });
 
@@ -162,7 +160,7 @@ router.get('/:id', async (req, res) => {
   const { booking, center } = await loadBooking(req);
   await booking.populate([
     { path: 'institute', select: 'name type city email phone' },
-    { path: 'center', select: 'name code city state address openTime closeTime vendor facilities', populate: { path: 'vendor', select: 'name' } },
+    { path: 'center', select: 'name code city state address openTime closeTime facilities' },
     { path: 'agency', select: 'name city email phone' },
   ]);
   const plain = booking.toObject({ flattenMaps: true });
@@ -183,8 +181,8 @@ router.put('/:id', async (req, res) => {
   const { booking, center } = await loadBooking(req);
   const hasAllocations = await LabAllocation.exists({ booking: booking._id });
   assertAllowed('edit', req.user, booking, { center, hasAllocations });
-  const body = bookingSchema.omit({ institute: true }).parse({ ...req.body, center: req.body.center || String(booking.center), mode: req.body.mode || booking.mode });
-  const { center: newCenter } = await validateBookingInput({ ...body, institute: String(booking.institute) }, req.user);
+  const body = bookingSchema.omit({ institute: true, agency: true }).parse({ ...req.body, center: req.body.center || String(booking.center), mode: req.body.mode || booking.mode });
+  const { center: newCenter } = await validateBookingInput({ ...body, institute: String(booking.institute), agency: booking.agency && String(booking.agency) }, req.user);
   Object.assign(booking, body, { billing: { ...booking.billing.toObject(), ...billingFor(newCenter, body.mode, body.shifts) } });
   booking.timeline.push(event(req.user, 'edited'));
   await booking.save();
@@ -209,14 +207,13 @@ router.put('/:id/allocations/:shiftId', async (req, res) => {
   const { total, labs } = await saveAllocation({ booking, shiftId: shift._id, window: shift, items, userId: req.user._id });
   const summary = await allocationSummary(booking);
   const before = booking.status;
-  booking.status = summary.complete ? 'allocated' : 'requested';
+  booking.status = summary.complete ? 'confirmed' : 'requested';
   const labCodes = items.map((it) => labs.find((l) => String(l._id) === it.lab)?.code).join(', ');
   booking.timeline.push(event(req.user, 'allocation_updated', `${shift.date} ${shift.startTime}: ${total}/${shift.candidates} seats${labCodes ? ` in ${labCodes}` : ''}`));
-  if (before !== 'allocated' && booking.status === 'allocated') {
-    booking.review = { decision: null, note: '' };
-    booking.timeline.push(event(req.user, 'allocated', 'All shifts have lab allocation'));
-    const reviewer = booking.mode === 'online' ? [ROLES.VENDOR, ROLES.SUPER_ADMIN] : [ROLES.INSTITUTE, ROLES.SUPER_ADMIN];
-    await notifyBooking(booking, `Lab allocation ready: ${booking.bookingNo}`, `${booking.examName}: labs allocated for all shifts. Please verify the allocation.`, { exclude: req.user._id, roles: [...reviewer, ROLES.INSTITUTE] });
+  if (before !== 'confirmed' && booking.status === 'confirmed') {
+    const rooms = booking.mode === 'online' ? 'Labs' : 'Classrooms';
+    booking.timeline.push(event(req.user, 'allocated', `${rooms} allocated for all shifts`));
+    await notifyBooking(booking, `${rooms} allocated: ${booking.bookingNo}`, `${booking.examName}: ${rooms.toLowerCase()} allocated for all shifts. Readiness checklists are open.`, { exclude: req.user._id });
   }
   await booking.save();
   res.json({ allocation: summary, status: booking.status });
@@ -250,7 +247,7 @@ router.put('/:id/mock', async (req, res) => {
   booking.mock = { ...body, status: 'requested', requestedBy: req.user._id, requestedRole: req.user.role };
   booking.timeline.push(event(req.user, 'mock_requested', `${mockWindow(body)}, ${body.candidates} candidates`));
   await booking.save();
-  await notifyBooking(booking, `Mock day requested: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(body)} needs lab allocation.`, { exclude: req.user._id, roles: [ROLES.NETWORK, ROLES.VENDOR] });
+  await notifyBooking(booking, `Mock day requested: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(body)} needs lab allocation.`, { exclude: req.user._id, roles: [ROLES.NETWORK, ROLES.SUPER_ADMIN] });
   res.json({ booking });
 });
 
@@ -279,33 +276,13 @@ router.put('/:id/mock/allocation', async (req, res) => {
   const { items } = z.object({ items: z.array(z.object({ lab: objectId, seats: z.number().int().min(1) })).max(50) }).parse(req.body);
   const m = booking.mock;
   const { total, labs } = await saveAllocation({ booking, shiftId: m._id, kind: 'mock', window: m, items, userId: req.user._id });
-  m.status = total >= m.candidates ? 'allocated' : 'requested';
-  m.permission = { decision: null, note: '' };
+  m.status = total >= m.candidates ? 'approved' : 'requested';
   const labCodes = items.map((it) => labs.find((l) => String(l._id) === it.lab)?.code).join(', ');
   booking.timeline.push(event(req.user, 'mock_allocated', `${total}/${m.candidates} seats${labCodes ? ` in ${labCodes}` : ''}`));
   await booking.save();
-  if (m.status === 'allocated') {
-    await notifyBooking(booking, `Mock day labs allocated: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(m)} needs lab permission.`, { exclude: req.user._id, roles: [ROLES.VENDOR, ROLES.AGENCY, ROLES.INSTITUTE] });
+  if (m.status === 'approved') {
+    await notifyBooking(booking, `Mock day labs allocated: ${booking.bookingNo}`, `${booking.examName}: mock day ${mockWindow(m)} labs are allocated.`, { exclude: req.user._id });
   }
-  res.json({ booking });
-});
-
-router.post('/:id/mock/permission', async (req, res) => {
-  const { booking, center } = await loadBooking(req);
-  assertAllowed('mockPermission', req.user, booking, { center });
-  const { decision, note } = z.object({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(1000).optional().default('') }).parse(req.body);
-  if (decision === 'rejected' && !note) throw new HttpError(400, 'Add a note explaining what needs to change');
-  const m = booking.mock;
-  m.permission = { decision, note, by: req.user._id, at: new Date() };
-  m.status = decision === 'approved' ? 'approved' : 'requested';
-  booking.timeline.push(event(req.user, decision === 'approved' ? 'mock_permitted' : 'mock_rejected', note));
-  await booking.save();
-  await notifyBooking(
-    booking,
-    `Mock day ${decision === 'approved' ? 'permitted' : 'needs changes'}: ${booking.bookingNo}`,
-    `${booking.examName}: mock day ${mockWindow(m)}${note ? ` - ${note}` : ''}`,
-    { exclude: req.user._id },
-  );
   res.json({ booking });
 });
 
@@ -320,24 +297,6 @@ router.post('/:id/mock/result', async (req, res) => {
   booking.timeline.push(event(req.user, 'mock_completed', `${present}/${m.candidates} appeared${remarks ? ` - ${remarks}` : ''}`));
   await booking.save();
   await notifyBooking(booking, `Mock day completed: ${booking.bookingNo}`, `${booking.examName}: ${present}/${m.candidates} candidates appeared in the mock test.`, { exclude: req.user._id });
-  res.json({ booking });
-});
-
-router.post('/:id/review', async (req, res) => {
-  const { booking, center } = await loadBooking(req);
-  assertAllowed('review', req.user, booking, { center });
-  const body = z.object({ decision: z.enum(['approved', 'changes_requested']), note: z.string().trim().max(1000).optional().default('') }).parse(req.body);
-  if (body.decision === 'changes_requested' && !body.note) throw new HttpError(400, 'Tell the allocator what needs to change');
-  booking.review = { decision: body.decision, note: body.note, by: req.user._id, at: new Date() };
-  booking.status = body.decision === 'approved' ? 'confirmed' : 'requested';
-  booking.timeline.push(event(req.user, body.decision === 'approved' ? 'confirmed' : 'changes_requested', body.note));
-  await booking.save();
-  await notifyBooking(
-    booking,
-    body.decision === 'approved' ? `Booking confirmed: ${booking.bookingNo}` : `Allocation changes requested: ${booking.bookingNo}`,
-    body.decision === 'approved' ? `${booking.examName} is confirmed. Center staff can start readiness checks.` : body.note,
-    { exclude: req.user._id },
-  );
   res.json({ booking });
 });
 
@@ -385,7 +344,7 @@ router.post('/:id/start', async (req, res) => {
   booking.status = 'in_progress';
   booking.timeline.push(event(req.user, 'started'));
   await booking.save();
-  await notifyBooking(booking, `Exam started: ${booking.bookingNo}`, booking.examName, { exclude: req.user._id, roles: [ROLES.INSTITUTE, ROLES.SUPER_ADMIN, ROLES.VENDOR] });
+  await notifyBooking(booking, `Exam started: ${booking.bookingNo}`, booking.examName, { exclude: req.user._id, roles: [ROLES.INSTITUTE, ROLES.SUPER_ADMIN] });
   res.json({ booking });
 });
 

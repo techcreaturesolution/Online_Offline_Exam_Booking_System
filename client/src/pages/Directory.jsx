@@ -23,7 +23,7 @@ export default function Directory() {
     <div className="space-y-5">
       <div>
         <h1 className="h1">User directory</h1>
-        <p className="text-sm text-slate-600">Contacts of institutes, booking vendors, network admins, center in-charges and agencies for exam-day coordination.</p>
+        <p className="text-sm text-slate-600">Contacts of institutes, network admins, center in-charges and agencies for exam-day coordination.</p>
       </div>
       <div className="card flex flex-wrap items-end gap-3">
         <label className="text-xs">Role

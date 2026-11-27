@@ -3,7 +3,7 @@ import { tenantScoped } from '../tenancy/plugin.js';
 
 const organizationSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ['institute', 'vendor', 'agency'], required: true },
+    kind: { type: String, enum: ['institute', 'agency'], required: true },
     name: { type: String, required: true, trim: true },
     type: { type: String, enum: ['university', 'institute', 'college', 'board', 'recruiter', 'company', 'other'], default: 'other' },
     code: { type: String, trim: true, uppercase: true },
