@@ -8,6 +8,7 @@ import { Organization } from '../models/Organization.js';
 import { NETWORK_CHECKLIST, ROLES, centerChecklistFor } from '../models/roles.js';
 import { bookingScope } from '../services/access.js';
 import { allocationSummary, availability, saveAllocation, suggestPlan } from '../services/allocation.js';
+import { withLocks } from '../services/locks.js';
 import { notifyBooking } from '../services/notify.js';
 import { allowedActions, denyReason, readinessKinds } from '../services/workflow.js';
 import { toCsv } from '../utils/csv.js';
@@ -349,46 +350,50 @@ router.post('/:id/start', async (req, res) => {
 });
 
 router.put('/:id/shifts/:shiftId/attendance', async (req, res) => {
-  const { booking, center } = await loadBooking(req);
-  assertAllowed('attendance', req.user, booking, { center });
-  const shift = booking.shifts.id(req.params.shiftId);
-  if (!shift) throw new HttpError(404, 'Shift not found');
-  if (req.user.role !== ROLES.SUPER_ADMIN && shift.date !== todayIso()) throw new HttpError(403, `Attendance for this shift is recorded on its exam date (${shift.date})`);
-  const body = z
-    .object({
-      present: z.number().int().min(0).optional(),
-      absent: z.number().int().min(0).optional(),
-      labs: z.array(z.object({ allocation: objectId, present: z.number().int().min(0) })).max(50).optional(),
-    })
-    .parse(req.body);
-  let { present, absent } = body;
-  if (body.labs) {
-    const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).populate('lab', 'code').lean();
-    const byId = new Map(allocs.map((a) => [String(a._id), a]));
-    for (const row of body.labs) {
-      const a = byId.get(row.allocation);
-      if (!a) throw new HttpError(400, 'Lab allocation not found for this shift');
-      if (row.present > a.seats) throw new HttpError(400, `Lab ${a.lab.code} has only ${a.seats} allocated seats`);
+  await withLocks([`attendance:${req.params.id}:${req.params.shiftId}`], async () => {
+    const { booking, center } = await loadBooking(req);
+    assertAllowed('attendance', req.user, booking, { center });
+    const shift = booking.shifts.id(req.params.shiftId);
+    if (!shift) throw new HttpError(404, 'Shift not found');
+    if (req.user.role !== ROLES.SUPER_ADMIN && shift.date !== todayIso()) throw new HttpError(403, `Attendance for this shift is recorded on its exam date (${shift.date})`);
+    const body = z
+      .object({
+        present: z.number().int().min(0).optional(),
+        absent: z.number().int().min(0).optional(),
+        labs: z.array(z.object({ allocation: objectId, present: z.number().int().min(0) })).max(50).optional(),
+      })
+      .parse(req.body);
+    let { present, absent } = body;
+    let writes = [];
+    if (body.labs) {
+      const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).populate('lab', 'code').lean();
+      const byId = new Map(allocs.map((a) => [String(a._id), a]));
+      for (const row of body.labs) {
+        const a = byId.get(row.allocation);
+        if (!a) throw new HttpError(400, 'Lab allocation not found for this shift');
+        if (row.present > a.seats) throw new HttpError(400, `Lab ${a.lab.code} has only ${a.seats} allocated seats`);
+      }
+      const sent = new Map(body.labs.map((row) => [row.allocation, row.present]));
+      present = allocs.reduce((n, a) => n + (sent.get(String(a._id)) ?? a.present ?? 0), 0);
+      absent = shift.candidates - present;
+      if (absent < 0) throw new HttpError(400, `Present exceeds the ${shift.candidates} registered candidates`);
+      writes = body.labs.map((row) => [row.allocation, row.present]);
+    } else if (present != null) {
+      const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).select('seats').lean();
+      if (allocs.length > 1) throw new HttpError(400, 'This shift uses more than one classroom; record present per classroom');
+      if (allocs.length === 1) {
+        if (present > allocs[0].seats) throw new HttpError(400, `Only ${allocs[0].seats} seats are allocated`);
+        writes = [[allocs[0]._id, present]];
+      }
     }
-    await LabAllocation.bulkWrite(body.labs.map((row) => ({ updateOne: { filter: { _id: row.allocation }, update: { $set: { present: row.present } } } })));
-    const fresh = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).lean();
-    present = fresh.reduce((n, a) => n + (a.present || 0), 0);
-    absent = shift.candidates - present;
-    if (absent < 0) throw new HttpError(400, `Present exceeds the ${shift.candidates} registered candidates`);
-  } else if (present != null) {
-    const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).select('seats').lean();
-    if (allocs.length > 1) throw new HttpError(400, 'This shift uses more than one classroom; record present per classroom');
-    if (allocs.length === 1) {
-      if (present > allocs[0].seats) throw new HttpError(400, `Only ${allocs[0].seats} seats are allocated`);
-      await LabAllocation.updateOne({ _id: allocs[0]._id }, { $set: { present } });
-    }
-  }
-  if (present == null || absent == null) throw new HttpError(400, 'Send present and absent counts or lab-wise attendance');
-  if (present + absent !== shift.candidates) throw new HttpError(400, `Present + absent must equal the ${shift.candidates} registered candidates`);
-  shift.attendance = { present, absent, recordedBy: req.user._id, recordedAt: new Date() };
-  booking.timeline.push(event(req.user, 'attendance', `${shift.date} ${shift.startTime}: ${present} present, ${absent} absent`));
-  await booking.save();
-  res.json({ booking });
+    if (present == null || absent == null) throw new HttpError(400, 'Send present and absent counts or lab-wise attendance');
+    if (present + absent !== shift.candidates) throw new HttpError(400, `Present + absent must equal the ${shift.candidates} registered candidates`);
+    for (const [_id, n] of writes) await LabAllocation.updateOne({ _id }, { $set: { present: n } });
+    shift.attendance = { present, absent, recordedBy: req.user._id, recordedAt: new Date() };
+    booking.timeline.push(event(req.user, 'attendance', `${shift.date} ${shift.startTime}: ${present} present, ${absent} absent`));
+    await booking.save();
+    res.json({ booking });
+  });
 });
 
 router.post('/:id/incidents', async (req, res) => {

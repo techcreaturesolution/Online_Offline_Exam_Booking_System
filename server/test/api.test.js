@@ -287,6 +287,25 @@ test('the exam agency sees a user directory without super admins', async (t) => 
   assert.equal((await api('institute', 'GET', '/meta/directory')).status, 403);
 });
 
+test('rejected single-classroom attendance does not change the classroom count', async (t) => {
+  if (skip) return t.skip('MongoDB not reachable');
+  const ahm = await centerByCode('AHM01');
+  const created = await api('agency', 'POST', '/bookings', { institute: await instituteId('GSTU'), center: ahm._id, examName: 'Single Lab Attendance', mode: 'online', shifts: [{ date: todayIso(), startTime: '16:00', endTime: '17:00', candidates: 5 }] });
+  const { _id: id, shifts: [{ _id: shiftId }] } = created.data.booking;
+  const sug = await api('network', 'GET', `/bookings/${id}/allocations/suggest?shiftId=${shiftId}`);
+  assert.equal((await api('network', 'PUT', `/bookings/${id}/allocations/${shiftId}`, { items: sug.data.items.slice(0, 1).map((i) => ({ ...i, seats: 5 })) })).data.status, 'confirmed');
+  const { data: detail } = await api('admin', 'GET', `/bookings/${id}`);
+  const all = (list) => Object.fromEntries(list.map((c) => [c.key, true]));
+  await api('network', 'PUT', `/bookings/${id}/readiness/network`, { items: all(detail.checklists.network) });
+  await api('center', 'PUT', `/bookings/${id}/readiness/center`, { items: all(detail.checklists.center) });
+  assert.equal((await api('agency', 'POST', `/bookings/${id}/start`)).status, 200);
+  assert.equal((await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { present: 3, absent: 5 })).status, 400);
+  const { data: live } = await api('agency', 'GET', `/bookings/${id}`);
+  assert.ok(!live.allocation.shifts[0].allocations[0].present, 'classroom count unchanged after a rejected submission');
+  assert.equal((await api('agency', 'PUT', `/bookings/${id}/shifts/${shiftId}/attendance`, { present: 3, absent: 2 })).status, 200);
+  assert.equal((await api('agency', 'GET', `/bookings/${id}`)).data.allocation.shifts[0].allocations[0].present, 3);
+});
+
 test('attendance counts roll up classrooms by block and center', async (t) => {
   if (skip) return t.skip('MongoDB not reachable');
   const r = await api('admin', 'GET', `/reports/attendance?date=${todayIso()}`);
