@@ -1,14 +1,7 @@
-import { Center } from '../models/Center.js';
 import { ROLES } from '../models/roles.js';
 import { HttpError } from '../utils/httpError.js';
 
 const ids = (list) => (list || []).map((x) => String(x?._id || x));
-
-export async function vendorCenterIds(user) {
-  if (!user.organization) return [];
-  const centers = await Center.find({ vendor: user.organization }).select('_id').lean();
-  return centers.map((c) => c._id);
-}
 
 export async function bookingScope(user) {
   switch (user.role) {
@@ -16,8 +9,6 @@ export async function bookingScope(user) {
       return {};
     case ROLES.INSTITUTE:
       return { institute: user.organization };
-    case ROLES.VENDOR:
-      return { center: { $in: await vendorCenterIds(user) } };
     case ROLES.NETWORK:
       return { center: { $in: user.centers || [] }, mode: 'online' };
     case ROLES.CENTER:
@@ -34,8 +25,6 @@ export async function centerScope(user) {
     case ROLES.NETWORK:
     case ROLES.CENTER:
       return { _id: { $in: user.centers || [] } };
-    case ROLES.VENDOR:
-      return { vendor: user.organization };
     default:
       return {};
   }

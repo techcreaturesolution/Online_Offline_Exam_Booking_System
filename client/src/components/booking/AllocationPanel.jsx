@@ -76,29 +76,14 @@ export function ShiftAllocator({ suggestUrl, saveUrl, needed, current: currentLi
 }
 
 export default function AllocationPanel({ booking, allocation, actions, reload }) {
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
   const canAllocate = actions.includes('allocate');
-  const canReview = actions.includes('review');
-  const review = async (decision) => {
-    setError('');
-    try {
-      await api.post(`/bookings/${booking._id}/review`, { decision, note });
-      setNote('');
-      reload();
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
   const allocator = booking.mode === 'online' ? 'Network Admin' : 'Center In-Charge';
-  const reviewer = booking.mode === 'online' ? 'Booking Vendor' : 'Institute';
   return (
     <div className="card space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="h2">{booking.mode === 'online' ? 'Computer lab allocation' : 'Exam hall allocation'}</h2>
-        <span className="text-xs text-slate-500">Allocated by {allocator} · verified by {reviewer}</span>
+        <h2 className="h2">{booking.mode === 'online' ? 'Computer lab allocation' : 'Classroom allocation'}</h2>
+        <span className="text-xs text-slate-500">Allocated by the {allocator} · visible to everyone on this exam</span>
       </div>
-      {booking.review?.decision === 'changes_requested' && booking.status === 'requested' && <Alert kind="info">Changes requested: {booking.review.note}</Alert>}
       {booking.shifts.map((s, i) => {
         const sum = allocation.shifts.find((x) => String(x.shiftId) === String(s._id));
         return (
@@ -122,17 +107,6 @@ export default function AllocationPanel({ booking, allocation, actions, reload }
           </div>
         );
       })}
-      {canReview && (
-        <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
-          <div className="font-medium text-sky-900">Verify the allocation</div>
-          <Alert>{error}</Alert>
-          <textarea className="input" rows={2} placeholder="Note (required when requesting changes)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <div className="flex gap-2">
-            <button className="btn-success" onClick={() => review('approved')}>Approve & confirm</button>
-            <button className="btn-secondary" onClick={() => review('changes_requested')}>Request changes</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

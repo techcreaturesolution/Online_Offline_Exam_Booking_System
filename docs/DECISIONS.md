@@ -24,3 +24,9 @@ Simplest-option choices made where the SRS is open (SRS section 12).
    - **Tenant deletion** sets status `cancelled` with `deletionScheduledAt` = +30 days (platform owner can reactivate before then); the purge job comes with Phase 6 retention work.
    - **Deferred to later phases:** email verification at sign-up (needs SMTP; Phase 5 with COM-001), trial-expiry enforcement and plan limits (Phase 2 billing), SEC-001 permission matrix and custom roles (permissions stay role-based for now), SEC-005 refresh tokens / session list.
    - **Counters** (booking numbers) are per tenant: `_id = <tenantId>:booking-<year>`; booking numbers and center codes are unique per tenant.
+9. **Booking Vendor removed; the agency creates exams** (product owner, 27 Nov 2026):
+   - The `booking_vendor` role, `vendor` organization kind and center vendor field are removed. The SRS and gap-analysis documents still mention the vendor as originally written.
+   - The Exam Conducting Agency creates the exam: institute, center, mode, dates/shifts and candidate count per shift. Institutes no longer create bookings; they see status, allocation, counts and utilization.
+   - Network Admin (online labs) and Center In-Charge (offline classrooms) allocate; a complete allocation sets the booking to `confirmed` with no verification step. `POST /bookings/:id/review` and `POST /bookings/:id/mock/permission` are removed; a fully allocated mock day is `approved` directly.
+   - Editing, cancelling, billing and mock-day requests belong to the creating agency (and Super Admin). Only Super Admin can reassign the agency.
+   - Tenant sign-up types are `center`, `institute` and `agency`. Existing databases: run `npm run migrate:remove-vendor -w server`.

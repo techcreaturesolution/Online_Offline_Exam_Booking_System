@@ -54,7 +54,7 @@ const eventSchema = new mongoose.Schema(
 );
 
 const mockSchema = new mongoose.Schema({
-  status: { type: String, enum: ['requested', 'allocated', 'approved', 'completed'], default: 'requested' },
+  status: { type: String, enum: ['requested', 'approved', 'completed'], default: 'requested' },
   date: { type: String, required: true },
   startTime: { type: String, required: true },
   endTime: { type: String, required: true },
@@ -62,12 +62,6 @@ const mockSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
   requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   requestedRole: String,
-  permission: {
-    decision: { type: String, enum: ['approved', 'rejected', null], default: null },
-    note: { type: String, default: '' },
-    by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    at: Date,
-  },
   result: {
     present: { type: Number, default: null },
     remarks: { type: String, default: '' },
@@ -90,12 +84,6 @@ const bookingSchema = new mongoose.Schema(
     notes: { type: String, default: '' },
     status: { type: String, enum: BOOKING_STATUSES, default: 'requested', index: true },
     mock: { type: mockSchema, default: null },
-    review: {
-      decision: { type: String, enum: ['approved', 'changes_requested', null], default: null },
-      note: { type: String, default: '' },
-      by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-      at: Date,
-    },
     readiness: {
       network: { type: checkSchema, default: () => ({}) },
       center: { type: checkSchema, default: () => ({}) },

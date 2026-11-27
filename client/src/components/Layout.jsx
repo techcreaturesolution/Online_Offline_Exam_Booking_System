@@ -9,7 +9,7 @@ function navFor(role) {
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/bookings', label: role === 'exam_agency' ? 'Assigned exams' : 'Exam bookings' },
   ];
-  if (['institute_admin', 'super_admin'].includes(role)) items.push({ to: '/bookings/new', label: 'New booking' });
+  if (['exam_agency', 'super_admin'].includes(role)) items.push({ to: '/bookings/new', label: 'Create exam' });
   items.push({ to: '/centers', label: ['network_admin', 'center_incharge'].includes(role) ? 'My centers & labs' : 'Centers & labs' });
   items.push({ to: '/planning', label: 'Lab planning' });
   items.push({ to: '/attendance', label: 'Attendance counts' });

@@ -17,7 +17,6 @@ const centerSchema = new mongoose.Schema(
       online: { type: Number, default: 0, min: 0 },
       offline: { type: Number, default: 0, min: 0 },
     },
-    vendor: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },

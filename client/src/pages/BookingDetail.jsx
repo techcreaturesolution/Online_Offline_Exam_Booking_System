@@ -13,15 +13,14 @@ function Stepper({ booking }) {
   const idx = STATUS_ORDER.indexOf(booking.status);
   const labels = {
     requested: 'Requested',
-    allocated: booking.mode === 'online' ? 'Labs allocated' : 'Halls allocated',
-    confirmed: booking.mode === 'online' ? 'Vendor verified' : 'Institute verified',
+    confirmed: booking.mode === 'online' ? 'Labs allocated' : 'Classrooms allocated',
     ready: 'Center ready',
     in_progress: 'In progress',
     completed: 'Completed',
   };
   if (booking.status === 'cancelled') return <Alert>Cancelled: {booking.cancelReason}</Alert>;
   return (
-    <ol className="grid grid-cols-3 gap-2 md:grid-cols-6">
+    <ol className="grid grid-cols-3 gap-2 md:grid-cols-5">
       {STATUS_ORDER.map((s, i) => (
         <li key={s} className={`rounded-lg border px-2 py-1.5 text-center text-xs font-medium ${i < idx ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : i === idx ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-400'}`}>
           {i < idx ? '✓ ' : ''}{labels[s]}
@@ -56,8 +55,7 @@ export default function BookingDetail() {
           <ModeBadge mode={booking.mode} />
         </div>
         <p className="text-sm text-slate-600">
-          <span className="font-mono">{booking.bookingNo}</span>{booking.examCode ? ` · ${booking.examCode}` : ''} · {booking.institute.name} · <Link className="text-brand-600 hover:underline" to={`/centers/${booking.center._id}`}>{booking.center.name}, {booking.center.city}</Link>
-          {booking.center.vendor ? ` · Vendor: ${booking.center.vendor.name}` : ''}
+          <span className="font-mono">{booking.bookingNo}</span>{booking.examCode ? ` · ${booking.examCode}` : ''} · {booking.institute.name}{booking.agency ? ` · ${booking.agency.name}` : ''} · <Link className="text-brand-600 hover:underline" to={`/centers/${booking.center._id}`}>{booking.center.name}, {booking.center.city}</Link>
         </p>
       </div>
       <Stepper booking={booking} />
@@ -97,8 +95,7 @@ export default function BookingDetail() {
 function nextStep(b) {
   const online = b.mode === 'online';
   switch (b.status) {
-    case 'requested': return online ? 'Next: the Network Admin allocates computer labs for every shift.' : 'Next: the Center In-Charge allocates exam halls / classrooms for every shift.';
-    case 'allocated': return online ? 'Next: the Booking Vendor verifies the lab allocation.' : 'Next: the institute verifies the hall allocation.';
+    case 'requested': return online ? 'Next: the Network Admin allocates computer labs for every shift.' : 'Next: the Center In-Charge allocates classrooms / exam halls for every shift.';
     case 'confirmed': return online ? 'Next: the Network Admin and Center In-Charge complete their readiness checklists.' : 'Next: the Center In-Charge completes the center checklist (incl. strong room and answer sheets).';
     case 'ready': return b.agency ? 'Next: the exam conducting agency starts the exam.' : 'Next: assign an exam conducting agency, then start the exam.';
     case 'in_progress': return 'Next: record attendance for every shift, then the agency marks the exam completed.';

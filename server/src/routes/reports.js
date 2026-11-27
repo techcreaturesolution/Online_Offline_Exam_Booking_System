@@ -63,10 +63,9 @@ router.get('/dashboard', async (req, res) => {
   const pending = {
     [ROLES.NETWORK]: { label: 'Awaiting lab allocation', statuses: ['requested'] },
     [ROLES.CENTER]: { label: 'Awaiting allocation or readiness', statuses: ['requested', 'confirmed'] },
-    [ROLES.VENDOR]: { label: 'Allocations to verify', statuses: ['allocated'] },
-    [ROLES.INSTITUTE]: { label: 'Offline allocations to verify', statuses: ['allocated'], mode: 'offline' },
+    [ROLES.INSTITUTE]: { label: 'Exams in progress', statuses: ['in_progress'] },
     [ROLES.AGENCY]: { label: 'Exams ready to conduct', statuses: ['ready', 'in_progress'] },
-    [ROLES.SUPER_ADMIN]: { label: 'Open bookings', statuses: ['requested', 'allocated', 'confirmed', 'ready'] },
+    [ROLES.SUPER_ADMIN]: { label: 'Open bookings', statuses: ['requested', 'confirmed', 'ready'] },
   }[req.user.role];
   const actionNeeded = bookings.filter((b) => pending.statuses.includes(b.status) && (!pending.mode || b.mode === pending.mode) && !(req.user.role === ROLES.CENTER && b.status === 'requested' && b.mode === 'online')).length;
   res.json({

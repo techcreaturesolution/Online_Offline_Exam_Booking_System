@@ -88,7 +88,7 @@ test('queries without a tenant context fail instead of leaking data', { skip }, 
 
 test('organisations sign up for a trial; X-Tenant must match the account', { skip }, async (t) => {
   if (skip) return t.skip('MongoDB not available');
-  const body = { organisation: { name: 'Nova Exams', slug: 'nova', types: ['vendor'] }, name: 'Nova Admin', email: 'admin@nova.test', password: 'Nova@12345' };
+  const body = { organisation: { name: 'Nova Exams', slug: 'nova', types: ['center'] }, name: 'Nova Admin', email: 'admin@nova.test', password: 'Nova@12345' };
   const r = await call('POST', '/auth/signup-tenant', { body });
   assert.equal(r.status, 201);
   assert.equal(r.data.tenant.status, 'trial');
@@ -130,7 +130,7 @@ test('platform owner lists, suspends and impersonates tenants; every step is aud
   await call('PATCH', '/tenant', { token: imp.data.token, body: { branding: { primaryColor: '#123456' } } });
   assert.equal((await call('POST', '/admin/users', { token: imp.data.token, body: { name: 'Backdoor', email: 'backdoor@acme.test', password: 'Backdoor@1', role: 'super_admin' } })).status, 403);
   assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { password: 'Backdoor@1' } })).status, 403);
-  assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { role: 'booking_vendor' } })).status, 403);
+  assert.equal((await call('PUT', `/admin/users/${me.data.user._id}`, { token: imp.data.token, body: { role: 'exam_agency' } })).status, 403);
   assert.equal((await call('PUT', '/auth/me/password', { token: imp.data.token, body: { currentPassword: DEMO_PASSWORD, newPassword: 'Backdoor@1' } })).status, 403);
 
   await call('PATCH', `/platform/tenants/${acme._id}`, { token: owner, body: { status: 'suspended' } });

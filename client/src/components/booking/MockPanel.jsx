@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert } from '../ui.jsx';
 import { ShiftAllocator } from './AllocationPanel.jsx';
 import { api, errorMessage } from '../../lib/api.js';
-import { MOCK_STATUS, fmtDate, fmtDateTime, seatRange, todayIso } from '../../lib/format.js';
+import { MOCK_STATUS, fmtDate, seatRange, todayIso } from '../../lib/format.js';
 
 function RequestForm({ booking, onDone }) {
   const m = booking.mock;
@@ -40,7 +40,6 @@ function RequestForm({ booking, onDone }) {
 export default function MockPanel({ booking, mockAllocations, actions, reload }) {
   const m = booking.mock;
   const [error, setError] = useState('');
-  const [note, setNote] = useState('');
   const [result, setResult] = useState({ present: m?.result?.present ?? '', remarks: m?.result?.remarks || '' });
   const [editing, setEditing] = useState(false);
   const act = async (fn) => {
@@ -58,7 +57,7 @@ export default function MockPanel({ booking, mockAllocations, actions, reload })
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="h2">Mock day</h2>
-        <span className="text-xs text-slate-500">Requested by institute or agency · labs by Network Admin · permission by Booking Vendor</span>
+        <span className="text-xs text-slate-500">Requested by the agency · labs allocated by the Network Admin</span>
       </div>
       <Alert>{error}</Alert>
       {!m && <p className="text-sm text-slate-500">No mock day planned. A mock test lets candidates and staff check systems and logins before the exam date.</p>}
@@ -77,23 +76,11 @@ export default function MockPanel({ booking, mockAllocations, actions, reload })
               {mockAllocations.map((a) => <span key={a._id} className="rounded bg-slate-100 px-2 py-0.5 text-xs">{a.lab.code} · {a.lab.name}: <b>{a.seats}</b> <span className="text-slate-500">({seatRange(a)})</span></span>)}
             </div>
           )}
-          {m.permission?.decision === 'rejected' && m.status === 'requested' && <Alert kind="info">Vendor asked for changes: {m.permission.note}</Alert>}
-          {m.permission?.decision === 'approved' && <div className="mt-2 text-xs text-emerald-700">Lab permission granted {fmtDateTime(m.permission.at)}{m.permission.note ? ` – ${m.permission.note}` : ''}</div>}
           {m.status === 'completed' && <div className="mt-2 text-xs">Result: <b>{m.result.present}/{m.candidates}</b> appeared{m.result.remarks ? ` – ${m.result.remarks}` : ''}</div>}
         </div>
       )}
       {actions.includes('mockAllocate') && (
         <ShiftAllocator key={`${m._id}-${seats}`} suggestUrl={`/bookings/${booking._id}/mock/suggest`} saveUrl={`/bookings/${booking._id}/mock/allocation`} needed={m.candidates} current={mockAllocations} onSaved={reload} />
-      )}
-      {actions.includes('mockPermission') && (
-        <div className="space-y-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
-          <div className="font-medium text-sky-900">Grant mock day lab permission</div>
-          <textarea className="input" rows={2} placeholder="Note (required when sending back)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <div className="flex gap-2">
-            <button className="btn-success" onClick={() => act(() => api.post(`/bookings/${booking._id}/mock/permission`, { decision: 'approved', note }))}>Grant permission</button>
-            <button className="btn-secondary" onClick={() => act(() => api.post(`/bookings/${booking._id}/mock/permission`, { decision: 'rejected', note }))}>Send back</button>
-          </div>
-        </div>
       )}
       {actions.includes('mockResult') && (
         <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">

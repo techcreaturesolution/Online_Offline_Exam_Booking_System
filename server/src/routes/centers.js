@@ -5,7 +5,6 @@ import { Booking } from '../models/Booking.js';
 import { Center } from '../models/Center.js';
 import { Lab, labMode, usableSeats } from '../models/Lab.js';
 import { LabAllocation } from '../models/LabAllocation.js';
-import { Organization } from '../models/Organization.js';
 import { ROLES } from '../models/roles.js';
 import { assertCanManageLab, centerScope, managesCenter } from '../services/access.js';
 import { availability, takenSeats } from '../services/allocation.js';
@@ -28,7 +27,6 @@ const centerSchema = z.object({
   openTime: time.default('08:00'),
   closeTime: time.default('20:00'),
   ratePerSeat: z.object({ online: z.number().min(0).default(0), offline: z.number().min(0).default(0) }).optional(),
-  vendor: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional(),
   active: z.boolean().optional(),
 });
 
@@ -45,7 +43,7 @@ function summarize(center, labs) {
 }
 
 async function loadCenter(id) {
-  const center = await Center.findById(id).populate('vendor', 'name').lean();
+  const center = await Center.findById(id).lean();
   if (!center) throw new HttpError(404, 'Center not found');
   return center;
 }
@@ -55,7 +53,7 @@ router.get('/centers', async (req, res) => {
   if (req.user.role !== ROLES.SUPER_ADMIN) filter.active = true;
   if (req.query.mode) filter.modes = String(req.query.mode);
   if (req.query.city) filter.city = new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
-  const centers = await Center.find(filter).populate('vendor', 'name').sort({ name: 1 }).lean();
+  const centers = await Center.find(filter).sort({ name: 1 }).lean();
   const labs = await Lab.find({ center: { $in: centers.map((c) => c._id) } }).lean();
   res.json({ centers: centers.map((c) => summarize(c, labs)) });
 });
@@ -63,7 +61,6 @@ router.get('/centers', async (req, res) => {
 router.post('/centers', requireRoles(ROLES.SUPER_ADMIN), async (req, res) => {
   const body = centerSchema.parse(req.body);
   checkHours(body);
-  if (body.vendor && !(await Organization.exists({ _id: body.vendor, kind: 'vendor' }))) throw new HttpError(400, 'Vendor not found');
   if (await Center.exists({ code: body.code.toUpperCase() })) throw new HttpError(409, 'Center code already exists');
   res.status(201).json({ center: await Center.create(body) });
 });
@@ -79,7 +76,6 @@ router.put('/centers/:id', async (req, res) => {
   if (!center) throw new HttpError(404, 'Center not found');
   const body = centerSchema.partial().parse(req.body);
   if (req.user.role === ROLES.SUPER_ADMIN) {
-    if (body.vendor && !(await Organization.exists({ _id: body.vendor, kind: 'vendor' }))) throw new HttpError(400, 'Vendor not found');
     Object.assign(center, body);
   } else if (req.user.role === ROLES.CENTER && managesCenter(req.user, center._id)) {
     for (const k of INCHARGE_FIELDS) if (body[k] !== undefined) center[k] = body[k];

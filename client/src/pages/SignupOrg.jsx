@@ -4,13 +4,13 @@ import { Alert } from '../components/ui.jsx';
 import { api, errorMessage } from '../lib/api.js';
 
 const TYPES = [
-  ['vendor', 'Booking vendor / exam center network'],
+  ['center', 'Exam center network'],
   ['institute', 'University / institute'],
   ['agency', 'Exam conducting agency'],
 ];
 
 export default function SignupOrg() {
-  const [f, setF] = useState({ orgName: '', slug: '', types: ['vendor'], name: '', email: '', phone: '', password: '' });
+  const [f, setF] = useState({ orgName: '', slug: '', types: ['agency'], name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);

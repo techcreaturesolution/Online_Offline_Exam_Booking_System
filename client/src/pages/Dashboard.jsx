@@ -7,11 +7,10 @@ import { useAuth } from '../lib/auth.jsx';
 import { STATUS, STATUS_ORDER, fmtDate } from '../lib/format.js';
 
 const GUIDE = {
-  institute_admin: 'Request exam slots, upload candidates, verify offline hall allocation and track counts and attendance.',
-  booking_vendor: 'Verify the Network Admin\'s lab allocation for online exams, assign agencies and manage billing.',
+  institute_admin: 'Track your exams: status, lab / classroom allocation, candidate counts and attendance.',
   network_admin: 'Allocate computer labs to online exam bookings, then complete the network readiness checklist.',
   center_incharge: 'Allocate exam halls for offline exams and complete the center readiness checklist for every exam.',
-  exam_agency: 'Start assigned exams once the center is ready, record attendance and incidents, then complete the exam.',
+  exam_agency: 'Create exams with dates, center and candidate counts, then start them once the center is ready, record attendance and complete them.',
   super_admin: 'Overview of every booking, center and lab across the platform.',
 };
 
@@ -34,7 +33,7 @@ export default function Dashboard() {
           <h1 className="h1">Welcome, {user.name.split(' ')[0]}</h1>
           <p className="text-sm text-slate-600">{GUIDE[user.role]}</p>
         </div>
-        {['institute_admin', 'super_admin'].includes(user.role) && <Link to="/bookings/new" className="btn-primary">+ New exam booking</Link>}
+        {['exam_agency', 'super_admin'].includes(user.role) && <Link to="/bookings/new" className="btn-primary">+ Create exam</Link>}
       </div>
 
       <Link to="/bookings" className="block rounded-xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100">

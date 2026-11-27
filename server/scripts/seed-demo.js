@@ -23,8 +23,8 @@ export async function seedDemo() {
     await Promise.all([Booking, Center, Counter, Lab, LabAllocation, Notification, Organization, User, Tenant].map((m) => m.deleteMany({})));
     await AuditLog.deleteMany({}, { purgeTenant: true });
     const [main, acme] = await Tenant.create([
-      { name: 'TheSpot Exam Services', slug: 'default', types: ['vendor', 'institute', 'agency'], status: 'active', plan: 'growth', contactEmail: 'admin@examhub.test' },
-      { name: 'Acme Assessment Network', slug: 'acme', types: ['vendor'], status: 'trial', plan: 'trial', trialEndsAt: new Date(Date.now() + 14 * 86400000), contactEmail: 'admin@acme.test' },
+      { name: 'TheSpot Exam Services', slug: 'default', types: ['center', 'institute', 'agency'], status: 'active', plan: 'growth', contactEmail: 'admin@examhub.test' },
+      { name: 'Acme Assessment Network', slug: 'acme', types: ['center'], status: 'trial', plan: 'trial', trialEndsAt: new Date(Date.now() + 14 * 86400000), contactEmail: 'admin@acme.test' },
     ]);
     const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
     const { users } = await withTenant(main._id, () => seedDefaultTenant(main));
@@ -40,18 +40,17 @@ export async function seedDemo() {
 async function seedDefaultTenant(tenant) {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
-  const [gtu, sim, vendor, agency, agency2] = await Organization.create([
+  const [gtu, sim, agency, agency2] = await Organization.create([
     { kind: 'institute', name: 'Gujarat State Technical University', type: 'university', code: 'GSTU', city: 'Ahmedabad', state: 'Gujarat', email: 'exams@gstu.test' },
     { kind: 'institute', name: 'Spot Institute of Management', type: 'institute', code: 'SIM', city: 'Surat', state: 'Gujarat', email: 'admin@sim.test' },
-    { kind: 'vendor', name: 'TheSpot Exam Services', type: 'company', code: 'TSES', city: 'Ahmedabad', state: 'Gujarat' },
     { kind: 'agency', name: 'EduSecure Exam Agency', type: 'company', code: 'EDUSEC', city: 'Ahmedabad', state: 'Gujarat' },
     { kind: 'agency', name: 'National Assessment Partners', type: 'company', code: 'NAP', city: 'Vadodara', state: 'Gujarat' },
   ]);
 
   const [ahm, srt, vad] = await Center.create([
-    { name: 'Ahmedabad Digital Exam Center', code: 'AHM01', address: 'SG Highway, Ahmedabad', city: 'Ahmedabad', state: 'Gujarat', pincode: '380054', modes: ['online', 'offline'], facilities: ['CCTV', 'Power backup', 'Jammer', 'Biometric', 'Wheelchair access'], ratePerSeat: { online: 450, offline: 200 }, vendor: vendor._id },
-    { name: 'Surat Tech Assessment Hub', code: 'SRT01', address: 'Ring Road, Surat', city: 'Surat', state: 'Gujarat', pincode: '395002', modes: ['online'], facilities: ['CCTV', 'Power backup', 'Biometric'], ratePerSeat: { online: 400, offline: 0 }, vendor: vendor._id },
-    { name: 'Vadodara Exam Hall Complex', code: 'VAD01', address: 'Alkapuri, Vadodara', city: 'Vadodara', state: 'Gujarat', pincode: '390007', modes: ['offline'], facilities: ['CCTV', 'Strong room', 'Parking'], ratePerSeat: { online: 0, offline: 180 }, vendor: vendor._id },
+    { name: 'Ahmedabad Digital Exam Center', code: 'AHM01', address: 'SG Highway, Ahmedabad', city: 'Ahmedabad', state: 'Gujarat', pincode: '380054', modes: ['online', 'offline'], facilities: ['CCTV', 'Power backup', 'Jammer', 'Biometric', 'Wheelchair access'], ratePerSeat: { online: 450, offline: 200 } },
+    { name: 'Surat Tech Assessment Hub', code: 'SRT01', address: 'Ring Road, Surat', city: 'Surat', state: 'Gujarat', pincode: '395002', modes: ['online'], facilities: ['CCTV', 'Power backup', 'Biometric'], ratePerSeat: { online: 400, offline: 0 } },
+    { name: 'Vadodara Exam Hall Complex', code: 'VAD01', address: 'Alkapuri, Vadodara', city: 'Vadodara', state: 'Gujarat', pincode: '390007', modes: ['offline'], facilities: ['CCTV', 'Strong room', 'Parking'], ratePerSeat: { online: 0, offline: 180 } },
   ]);
 
   const labs = await Lab.create([
@@ -72,7 +71,6 @@ async function seedDefaultTenant(tenant) {
       { name: 'Super Admin', email: 'admin@examhub.test', role: ROLES.SUPER_ADMIN },
       { name: 'Dr. Meera Shah (Exam Controller)', email: 'university@examhub.test', role: ROLES.INSTITUTE, organization: gtu._id },
       { name: 'Rahul Patel (SIM Admin)', email: 'institute@examhub.test', role: ROLES.INSTITUTE, organization: sim._id },
-      { name: 'Kiran Desai (Booking Vendor)', email: 'vendor@examhub.test', role: ROLES.VENDOR, organization: vendor._id },
       { name: 'Amit Joshi (Network Admin)', email: 'network@examhub.test', role: ROLES.NETWORK, centers: [ahm._id, srt._id] },
       { name: 'Neha Trivedi (Center In-Charge AHM)', email: 'center@examhub.test', role: ROLES.CENTER, centers: [ahm._id] },
       { name: 'Vikram Rao (Center In-Charge SRT/VAD)', email: 'center2@examhub.test', role: ROLES.CENTER, centers: [srt._id, vad._id] },
@@ -103,28 +101,28 @@ async function seedDefaultTenant(tenant) {
     return b;
   }
 
-  await booking({ institute: gtu._id, center: ahm._id, examName: 'B.E. Semester VII Online Exam', examCode: 'BE-SEM7', mode: 'online', requirements: ['Webcam', 'Biometric attendance'], shifts: [
+  await booking({ institute: gtu._id, center: ahm._id, agency: agency._id, examName: 'B.E. Semester VII Online Exam', examCode: 'BE-SEM7', mode: 'online', requirements: ['Webcam', 'Biometric attendance'], shifts: [
     { label: 'Morning', date: addDays(today, 5), startTime: '09:30', endTime: '12:30', candidates: 150 },
     { label: 'Afternoon', date: addDays(today, 5), startTime: '14:00', endTime: '17:00', candidates: 140 },
   ] });
-  await booking({ institute: sim._id, center: ahm._id, agency: agency._id, examName: 'MBA Entrance Test (Online)', examCode: 'SIM-MET', mode: 'online', status: 'allocated', shifts: [
+  await booking({ institute: sim._id, center: ahm._id, agency: agency._id, examName: 'MBA Entrance Test (Online)', examCode: 'SIM-MET', mode: 'online', status: 'confirmed', shifts: [
     { label: 'Slot 1', date: addDays(today, 7), startTime: '10:00', endTime: '12:00', candidates: 150 },
-  ], timeline: [ev('requested'), ev('allocated', 'All shifts have lab allocation')] }, [[0, 'LAB-A', 110], [0, 'LAB-B', 40]]);
-  await booking({ institute: gtu._id, center: srt._id, agency: agency._id, examName: 'Diploma Engineering Online Exam', examCode: 'DIP-ONL', mode: 'online', status: 'confirmed', review: { decision: 'approved', by: users[3]._id, at: new Date() }, shifts: [
+  ], timeline: [ev('requested'), ev('allocated', 'Labs allocated for all shifts')] }, [[0, 'LAB-A', 110], [0, 'LAB-B', 40]]);
+  await booking({ institute: gtu._id, center: srt._id, agency: agency._id, examName: 'Diploma Engineering Online Exam', examCode: 'DIP-ONL', mode: 'online', status: 'confirmed', shifts: [
     { label: 'Morning', date: addDays(today, 3), startTime: '09:00', endTime: '11:00', candidates: 200 },
-  ], mock: { status: 'requested', date: addDays(today, 1), startTime: '15:00', endTime: '16:00', candidates: 60, notes: 'Mock test for system and login check', requestedBy: users[7]._id, requestedRole: 'exam_agency' },
-  readiness: { network: { items: { lan: true, systems: true }, done: false } }, timeline: [ev('requested'), ev('allocated'), ev('confirmed'), ev('mock_requested')] }, [[0, 'S-LAB1', 140], [0, 'S-LAB2', 60]]);
-  await booking({ institute: gtu._id, center: vad._id, agency: agency2._id, examName: 'B.Com Semester III Written Exam', examCode: 'BCOM-S3', mode: 'offline', status: 'ready', review: { decision: 'approved', by: users[1]._id, at: new Date() }, shifts: [
+  ], mock: { status: 'requested', date: addDays(today, 1), startTime: '15:00', endTime: '16:00', candidates: 60, notes: 'Mock test for system and login check', requestedBy: users[6]._id, requestedRole: 'exam_agency' },
+  readiness: { network: { items: { lan: true, systems: true }, done: false } }, timeline: [ev('requested'), ev('allocated'), ev('mock_requested')] }, [[0, 'S-LAB1', 140], [0, 'S-LAB2', 60]]);
+  await booking({ institute: gtu._id, center: vad._id, agency: agency2._id, examName: 'B.Com Semester III Written Exam', examCode: 'BCOM-S3', mode: 'offline', status: 'ready', shifts: [
     { label: 'Paper 1', date: addDays(today, 1), startTime: '10:00', endTime: '13:00', candidates: 420 },
-  ], readiness: { center: { items: full([...CENTER_CHECKLIST, ...OFFLINE_EXTRA_CHECKLIST]), done: true, by: users[6]._id, at: new Date() } }, timeline: [ev('requested'), ev('allocated'), ev('confirmed'), ev('center_checklist', 'Completed')] }, [[0, 'V-HN', 240], [0, 'V-HS', 180]]);
-  await booking({ institute: sim._id, center: ahm._id, agency: agency._id, examName: 'Faculty Recruitment CBT', examCode: 'SIM-FAC', mode: 'online', status: 'completed', review: { decision: 'approved', by: users[3]._id, at: new Date() }, shifts: [
+  ], readiness: { center: { items: full([...CENTER_CHECKLIST, ...OFFLINE_EXTRA_CHECKLIST]), done: true, by: users[5]._id, at: new Date() } }, timeline: [ev('requested'), ev('allocated'), ev('center_checklist', 'Completed')] }, [[0, 'V-HN', 240], [0, 'V-HS', 180]]);
+  await booking({ institute: sim._id, center: ahm._id, agency: agency._id, examName: 'Faculty Recruitment CBT', examCode: 'SIM-FAC', mode: 'online', status: 'completed', shifts: [
     { label: 'Shift 1', date: addDays(today, -6), startTime: '10:00', endTime: '12:00', candidates: 100, attendance: { present: 86, absent: 14, recordedAt: new Date() } },
     { label: 'Shift 2', date: addDays(today, -6), startTime: '14:00', endTime: '16:00', candidates: 90, attendance: { present: 81, absent: 9, recordedAt: new Date() } },
-  ], readiness: { network: { items: full(NETWORK_CHECKLIST), done: true }, center: { items: full(CENTER_CHECKLIST), done: true } }, incidents: [{ category: 'network', severity: 'medium', description: 'Switch on row 4 restarted, 6 candidates resumed after 4 minutes', resolved: true, by: users[4]._id, byRole: ROLES.NETWORK }], feedback: { rating: 4, comment: 'Smooth conduct, quick network recovery', at: new Date() }, timeline: [ev('requested'), ev('confirmed'), ev('started'), ev('completed', '167/190 candidates appeared')] }, [[0, 'LAB-A', 100], [1, 'LAB-B', 76], [1, 'LAB-C', 14]]);
-  await booking({ institute: gtu._id, center: ahm._id, agency: agency._id, examName: 'M.Sc. Mathematics Written Exam', examCode: 'MSC-MATH', mode: 'offline', status: 'in_progress', review: { decision: 'approved', by: users[1]._id, at: new Date() }, shifts: [
+  ], readiness: { network: { items: full(NETWORK_CHECKLIST), done: true }, center: { items: full(CENTER_CHECKLIST), done: true } }, incidents: [{ category: 'network', severity: 'medium', description: 'Switch on row 4 restarted, 6 candidates resumed after 4 minutes', resolved: true, by: users[3]._id, byRole: ROLES.NETWORK }], feedback: { rating: 4, comment: 'Smooth conduct, quick network recovery', at: new Date() }, timeline: [ev('requested'), ev('allocated'), ev('started'), ev('completed', '167/190 candidates appeared')] }, [[0, 'LAB-A', 100], [1, 'LAB-B', 76], [1, 'LAB-C', 14]]);
+  await booking({ institute: gtu._id, center: ahm._id, agency: agency._id, examName: 'M.Sc. Mathematics Written Exam', examCode: 'MSC-MATH', mode: 'offline', status: 'in_progress', shifts: [
     { label: 'Paper 2', date: today, startTime: '10:00', endTime: '13:00', candidates: 230 },
-  ], readiness: { center: { items: full([...CENTER_CHECKLIST, ...OFFLINE_EXTRA_CHECKLIST]), done: true } }, timeline: [ev('requested'), ev('confirmed'), ev('started')] }, [[0, 'HALL-1', 190], [0, 'CR-201', 40]]);
-  await booking({ institute: sim._id, center: srt._id, examName: 'Aptitude Test (Cancelled)', mode: 'online', status: 'cancelled', cancelReason: 'Exam postponed by institute', shifts: [
+  ], readiness: { center: { items: full([...CENTER_CHECKLIST, ...OFFLINE_EXTRA_CHECKLIST]), done: true } }, timeline: [ev('requested'), ev('allocated'), ev('started')] }, [[0, 'HALL-1', 190], [0, 'CR-201', 40]]);
+  await booking({ institute: sim._id, center: srt._id, agency: agency2._id, examName: 'Aptitude Test (Cancelled)', mode: 'online', status: 'cancelled', cancelReason: 'Exam postponed by agency', shifts: [
     { date: addDays(today, 9), startTime: '10:00', endTime: '11:00', candidates: 50 },
   ] });
   await Counter.create({ _id: `${tenant._id}:booking-${year}`, seq });

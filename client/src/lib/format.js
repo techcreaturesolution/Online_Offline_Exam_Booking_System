@@ -2,7 +2,6 @@ export const ROLE_LABELS = {
   platform_owner: 'Platform Owner',
   super_admin: 'Super Admin',
   institute_admin: 'University / Institute',
-  booking_vendor: 'Booking Vendor',
   network_admin: 'Network Admin',
   center_incharge: 'Center In-Charge',
   exam_agency: 'Exam Conducting Agency',
@@ -10,7 +9,6 @@ export const ROLE_LABELS = {
 
 export const STATUS = {
   requested: { label: 'Awaiting allocation', cls: 'bg-amber-100 text-amber-800' },
-  allocated: { label: 'Allocated – verify', cls: 'bg-sky-100 text-sky-800' },
   confirmed: { label: 'Confirmed', cls: 'bg-indigo-100 text-indigo-800' },
   ready: { label: 'Center ready', cls: 'bg-teal-100 text-teal-800' },
   in_progress: { label: 'In progress', cls: 'bg-violet-100 text-violet-800' },
@@ -18,7 +16,7 @@ export const STATUS = {
   cancelled: { label: 'Cancelled', cls: 'bg-slate-200 text-slate-600' },
 };
 
-export const STATUS_ORDER = ['requested', 'allocated', 'confirmed', 'ready', 'in_progress', 'completed'];
+export const STATUS_ORDER = ['requested', 'confirmed', 'ready', 'in_progress', 'completed'];
 
 export const LAB_TYPES = { computer_lab: 'Computer lab', exam_hall: 'Exam hall', classroom: 'Classroom' };
 
@@ -28,7 +26,6 @@ export const ACTION_LABELS = {
   allocation_updated: 'Allocation updated',
   allocated: 'Allocation complete',
   confirmed: 'Allocation verified & confirmed',
-  changes_requested: 'Changes requested',
   agency_assigned: 'Agency assigned',
   network_checklist: 'Network checklist',
   center_checklist: 'Center checklist',
@@ -53,8 +50,7 @@ export const ACTION_LABELS = {
 
 export const MOCK_STATUS = {
   requested: 'Waiting for Network Admin lab allocation',
-  allocated: 'Waiting for Booking Vendor lab permission',
-  approved: 'Permitted – agency conducts the mock test',
+  approved: 'Labs allocated – agency conducts the mock test',
   completed: 'Mock test completed',
 };
 

@@ -12,7 +12,7 @@ import { passwordSchema } from './auth.js';
 const router = Router();
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
 
-const ORG_KIND_BY_ROLE = { [ROLES.INSTITUTE]: 'institute', [ROLES.VENDOR]: 'vendor', [ROLES.AGENCY]: 'agency' };
+const ORG_KIND_BY_ROLE = { [ROLES.INSTITUTE]: 'institute', [ROLES.AGENCY]: 'agency' };
 const CENTER_ROLES = [ROLES.NETWORK, ROLES.CENTER];
 
 async function checkLinks(role, organization, centers) {
@@ -85,7 +85,7 @@ router.put('/users/:id', async (req, res) => {
 });
 
 const orgSchema = z.object({
-  kind: z.enum(['institute', 'vendor', 'agency']),
+  kind: z.enum(['institute', 'agency']),
   name: z.string().trim().min(2),
   type: z.enum(['university', 'institute', 'college', 'board', 'recruiter', 'company', 'other']).optional(),
   code: z.string().trim().max(20).optional(),

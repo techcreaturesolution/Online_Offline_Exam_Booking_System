@@ -4,7 +4,7 @@ import { todayIso } from '../utils/time.js';
 const same = (a, b) => a != null && b != null && String(a?._id || a) === String(b?._id || b);
 const inCenters = (user, booking) => (user.centers || []).some((c) => same(c, booking.center));
 
-const OPEN = ['requested', 'allocated', 'confirmed', 'ready'];
+const OPEN = ['requested', 'confirmed', 'ready'];
 
 export function isOwnInstitute(user, booking) {
   return user.role === ROLES.INSTITUTE && same(user.organization, booking.institute);
@@ -22,18 +22,9 @@ export function isAssignedAgency(user, booking) {
   return user.role === ROLES.AGENCY && same(user.organization, booking.agency);
 }
 
-export function isCenterVendor(user, booking, center) {
-  return user.role === ROLES.VENDOR && center && same(user.organization, center.vendor);
-}
-
 /** Who may allocate labs: Network Admin for online exams, Center In-Charge for offline exams. */
 export function allocatorRole(mode) {
   return mode === 'online' ? ROLES.NETWORK : ROLES.CENTER;
-}
-
-/** Who verifies an allocation: Booking Vendor for online exams, the University / Institute for offline exams. */
-export function reviewerRole(mode) {
-  return mode === 'online' ? ROLES.VENDOR : ROLES.INSTITUTE;
 }
 
 export function readinessKinds(mode) {
@@ -42,7 +33,6 @@ export function readinessKinds(mode) {
 
 /**
  * Returns null when the action is allowed, otherwise a reason string.
- * `ctx.center` is the booking's center document (needed for vendor checks).
  */
 export function denyReason(action, user, booking, ctx = {}) {
   const admin = user.role === ROLES.SUPER_ADMIN;
@@ -53,23 +43,17 @@ export function denyReason(action, user, booking, ctx = {}) {
   const mock = booking.mock;
   switch (action) {
     case 'edit':
-      if (!admin && !isOwnInstitute(user, booking)) return 'Only the booking institute can edit this booking';
+      if (!admin && !isAssignedAgency(user, booking)) return 'Only the exam conducting agency that created this exam can edit it';
       if (status !== 'requested' || ctx.hasAllocations) return 'Bookings can be edited only before labs are allocated';
       return null;
     case 'allocate':
       if (!admin && !(online ? isNetworkAdmin(user, booking) : isCenterIncharge(user, booking))) {
         return online ? 'Only the Network Admin of this center allocates labs for online exams' : 'Only the Center In-Charge allocates halls for offline exams';
       }
-      if (!['requested', 'allocated'].includes(status)) return 'Allocation is locked once the booking is confirmed';
-      return null;
-    case 'review':
-      if (!admin && !(online ? isCenterVendor(user, booking, ctx.center) : isOwnInstitute(user, booking))) {
-        return online ? 'Only the Booking Vendor of this center verifies online lab allocation' : 'Only the booking institute verifies offline hall allocation';
-      }
-      if (status !== 'allocated') return 'Allocation must be completed before it can be verified';
+      if (!['requested', 'confirmed'].includes(status)) return 'Allocation is locked once the center is ready';
       return null;
     case 'assignAgency':
-      if (!admin && !isOwnInstitute(user, booking) && !isCenterVendor(user, booking, ctx.center)) return 'Only the institute, booking vendor or admin can assign the agency';
+      if (!admin) return 'Only the Super Admin can change the exam conducting agency';
       if (!OPEN.includes(status)) return 'Agency can be changed only before the exam starts';
       return null;
     case 'readiness:network':
@@ -95,7 +79,7 @@ export function denyReason(action, user, booking, ctx = {}) {
       return null;
     case 'mockRequest':
       if (!online) return 'Mock day is available for online exams';
-      if (!admin && !isOwnInstitute(user, booking) && !isAssignedAgency(user, booking)) return 'Only the institute or assigned agency requests a mock day';
+      if (!admin && !isAssignedAgency(user, booking)) return 'Only the exam conducting agency requests a mock day';
       if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
       if (mock?.status === 'completed') return 'Mock day is already completed';
       if (today >= dates[0]) return 'Mock day must be before the exam date';
@@ -104,16 +88,11 @@ export function denyReason(action, user, booking, ctx = {}) {
       if (!online) return 'Mock day is available for online exams';
       if (!admin && !isNetworkAdmin(user, booking)) return 'Only the Network Admin of this center allocates mock day labs';
       if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
-      if (!mock || !['requested', 'allocated'].includes(mock.status)) return 'Mock day labs are allocated after a mock day is requested';
-      return null;
-    case 'mockPermission':
-      if (!admin && !isCenterVendor(user, booking, ctx.center)) return 'Only the Booking Vendor grants mock day lab permission';
-      if (!OPEN.includes(status)) return 'Mock day can be planned only before the exam starts';
-      if (mock?.status !== 'allocated') return 'Mock day labs must be allocated before permission is granted';
+      if (!mock || !['requested', 'approved'].includes(mock.status)) return 'Mock day labs are allocated after a mock day is requested';
       return null;
     case 'mockResult':
       if (!admin && !isAssignedAgency(user, booking)) return 'Only the assigned agency records the mock day result';
-      if (mock?.status !== 'approved') return 'Mock day needs lab permission first';
+      if (mock?.status !== 'approved') return 'Mock day needs lab allocation first';
       if (today < mock.date) return `Mock day result can be recorded on or after ${mock.date}`;
       return null;
     case 'incident':
@@ -128,11 +107,11 @@ export function denyReason(action, user, booking, ctx = {}) {
       if (booking.shifts.some((s) => s.attendance?.present == null)) return 'Record attendance for every shift first';
       return null;
     case 'cancel':
-      if (!admin && !isOwnInstitute(user, booking)) return 'Only the booking institute can cancel';
+      if (!admin && !isAssignedAgency(user, booking)) return 'Only the exam conducting agency can cancel this exam';
       if (!OPEN.includes(status)) return 'Only bookings that have not started can be cancelled';
       return null;
     case 'billing':
-      if (!admin && !isCenterVendor(user, booking, ctx.center)) return 'Only the Booking Vendor manages billing';
+      if (!admin && !isAssignedAgency(user, booking)) return 'Only the exam conducting agency or Super Admin manages billing';
       if (status === 'cancelled') return 'Booking is cancelled';
       return null;
     case 'feedback':
@@ -145,6 +124,6 @@ export function denyReason(action, user, booking, ctx = {}) {
 }
 
 export function allowedActions(user, booking, ctx = {}) {
-  const actions = ['edit', 'allocate', 'review', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'feedback', 'mockRequest', 'mockAllocate', 'mockPermission', 'mockResult'];
+  const actions = ['edit', 'allocate', 'assignAgency', 'readiness:network', 'readiness:center', 'start', 'attendance', 'incident', 'complete', 'cancel', 'billing', 'feedback', 'mockRequest', 'mockAllocate', 'mockResult'];
   return actions.filter((a) => denyReason(a, user, booking, ctx) === null);
 }

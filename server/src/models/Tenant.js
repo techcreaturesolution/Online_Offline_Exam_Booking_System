@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const TENANT_TYPES = ['vendor', 'institute', 'agency'];
+export const TENANT_TYPES = ['center', 'institute', 'agency'];
 export const TENANT_STATUSES = ['trial', 'active', 'suspended', 'cancelled'];
 
 const tenantSchema = new mongoose.Schema(

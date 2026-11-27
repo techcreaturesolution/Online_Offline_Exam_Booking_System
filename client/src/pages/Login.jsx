@@ -8,7 +8,6 @@ import { ROLE_LABELS } from '../lib/format.js';
 const DEMO = [
   ['admin@examhub.test', 'super_admin'],
   ['university@examhub.test', 'institute_admin'],
-  ['vendor@examhub.test', 'booking_vendor'],
   ['network@examhub.test', 'network_admin'],
   ['center@examhub.test', 'center_incharge'],
   ['agency@examhub.test', 'exam_agency'],

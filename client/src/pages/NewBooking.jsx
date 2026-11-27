@@ -22,7 +22,7 @@ export default function NewBooking() {
   useEffect(() => {
     api.get('/centers').then((r) => setCenters(r.data.centers.filter((c) => c.active)));
     api.get('/meta/agencies').then((r) => setAgencies(r.data.agencies));
-    if (user.role === 'super_admin') api.get('/meta/institutes').then((r) => setInstitutes(r.data.institutes));
+    api.get('/meta/institutes').then((r) => setInstitutes(r.data.institutes));
   }, [user.role]);
 
   const eligible = centers.filter((c) => c.modes.includes(f.mode));
@@ -52,13 +52,13 @@ export default function NewBooking() {
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <h1 className="h1">New exam booking</h1>
+      <h1 className="h1">Create exam</h1>
       <Alert>{error}</Alert>
       <div className="card grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <label className="label">Exam mode</label>
           <div className="grid gap-3 md:grid-cols-2">
-            {[['online', 'Online (Computer Based Test)', 'Network Admin allocates computer labs → Booking Vendor verifies'], ['offline', 'Offline (Pen & paper)', 'Center In-Charge allocates exam halls → you verify']].map(([m, t, d]) => (
+            {[['online', 'Online (Computer Based Test)', 'Network Admin allocates computer labs'], ['offline', 'Offline (Pen & paper)', 'Center In-Charge allocates classrooms / exam halls']].map(([m, t, d]) => (
               <button type="button" key={m} onClick={() => setF({ ...f, mode: m, center: '' })} className={`rounded-lg border p-3 text-left ${f.mode === m ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-300'}`}>
                 <div className="font-semibold">{t}</div>
                 <div className="text-xs text-slate-600">{d}</div>
@@ -66,15 +66,13 @@ export default function NewBooking() {
             ))}
           </div>
         </div>
-        {user.role === 'super_admin' && (
-          <div className="md:col-span-2">
-            <label className="label">Institute</label>
-            <select className="input" value={f.institute} onChange={set('institute')} required>
-              <option value="">Select institute…</option>
-              {institutes.map((i) => <option key={i._id} value={i._id}>{i.name}</option>)}
-            </select>
-          </div>
-        )}
+        <div className="md:col-span-2">
+          <label className="label">University / Institute</label>
+          <select className="input" value={f.institute} onChange={set('institute')} required>
+            <option value="">Select institute…</option>
+            {institutes.map((i) => <option key={i._id} value={i._id}>{i.name}</option>)}
+          </select>
+        </div>
         <div><label className="label">Exam name</label><input className="input" value={f.examName} onChange={set('examName')} required minLength={3} placeholder="e.g. B.Tech Semester 6 – Data Structures" /></div>
         <div><label className="label">Exam code (optional)</label><input className="input" value={f.examCode} onChange={set('examCode')} /></div>
         <div>
@@ -90,13 +88,15 @@ export default function NewBooking() {
             </p>
           )}
         </div>
-        <div>
-          <label className="label">Exam conducting agency (optional)</label>
-          <select className="input" value={f.agency} onChange={set('agency')}>
-            <option value="">Assign later</option>
-            {agencies.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
-          </select>
-        </div>
+        {user.role === 'super_admin' && (
+          <div>
+            <label className="label">Exam conducting agency (optional)</label>
+            <select className="input" value={f.agency} onChange={set('agency')}>
+              <option value="">Assign later</option>
+              {agencies.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="card space-y-3">

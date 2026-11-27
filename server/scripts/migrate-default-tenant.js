@@ -33,7 +33,7 @@ export async function migrateDefaultTenant({ slug = 'default', name = 'Default O
       if (!ownerPassword || ownerPassword.length < 8) throw new Error('Set PLATFORM_OWNER_PASSWORD (min 8 characters) to create the platform owner');
       if (await User.exists({ email: ownerEmail.toLowerCase() })) throw new Error(`${ownerEmail} is already a tenant user; use another email for the platform owner`);
     }
-    const tenant = (await Tenant.findOne({ slug })) || (await Tenant.create({ name, slug, types: ['vendor', 'institute', 'agency'], status: 'active', plan: 'enterprise' }));
+    const tenant = (await Tenant.findOne({ slug })) || (await Tenant.create({ name, slug, types: ['center', 'institute', 'agency'], status: 'active', plan: 'enterprise' }));
     const report = {};
     for (const Model of SCOPED) {
       const filter = { tenant: { $exists: false } };

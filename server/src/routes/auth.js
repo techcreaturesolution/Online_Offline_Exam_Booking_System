@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { requestedTenantSlug, requireAuth, signToken } from '../middleware/auth.js';
-import { Tenant } from '../models/Tenant.js';
+import { TENANT_TYPES, Tenant } from '../models/Tenant.js';
 import { audit } from '../services/audit.js';
 import { asPlatform, withTenant } from '../tenancy/context.js';
 import { Organization } from '../models/Organization.js';
@@ -66,7 +66,7 @@ const tenantSignupSchema = z.object({
   organisation: z.object({
     name: z.string().trim().min(3).max(120),
     slug: z.string().trim().toLowerCase().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, 'Use 3-40 lowercase letters, numbers or dashes'),
-    types: z.array(z.enum(['vendor', 'institute', 'agency'])).min(1),
+    types: z.array(z.enum(TENANT_TYPES)).min(1),
   }),
   name: z.string().trim().min(2),
   email: z.string().email(),

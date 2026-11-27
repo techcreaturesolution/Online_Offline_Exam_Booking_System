@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom';
 
 const ROLES = [
-  ['University / Institute', 'Request online or offline exam slots with candidate counts, verify offline hall allocation and track counts, attendance and lab utilization.'],
-  ['Booking Vendor', 'Manages center bookings: verifies the Network Admin\'s lab allocation for online exams, assigns agencies and handles billing.'],
+  ['University / Institute', 'Tracks its exams: status, lab and classroom allocation, candidate counts, attendance and lab utilization.'],
   ['Network Admin', 'Allocates computer labs per shift with live seat availability and conflict checks, then completes the network readiness checklist.'],
-  ['Center In-Charge', 'Allocates exam halls for offline exams, completes the center checklist, records attendance and reports incidents.'],
-  ['Exam Conducting Agency', 'Sees assigned exams, starts and completes them, records attendance and incidents on exam day.'],
-  ['Super Admin', 'Onboards centers, labs, institutes, vendors, agencies and users, and sees every booking and report.'],
+  ['Center In-Charge', 'Allocates classrooms and exam halls for offline exams, completes the center checklist, records attendance and reports incidents.'],
+  ['Exam Conducting Agency', 'Creates exams with dates, center and candidate counts, starts and completes them, and records attendance and incidents on exam day.'],
+  ['Super Admin', 'Onboards centers, labs, institutes, agencies and users, and sees every booking and report.'],
 ];
 
 const FEATURES = [
@@ -50,11 +49,10 @@ export default function Landing() {
           <div>
             <h2 className="text-2xl font-bold">Booking flow</h2>
             <ol className="mt-4 space-y-3 text-sm text-slate-700">
-              <li><b>1. Request</b> – the institute picks a center, exam mode, shifts and candidate count.</li>
-              <li><b>2. Allocate</b> – Network Admin (online) or Center In-Charge (offline) assigns labs and seats.</li>
-              <li><b>3. Verify</b> – the Booking Vendor (online) or the institute (offline) checks the allocation and confirms.</li>
-              <li><b>4. Ready</b> – network and center checklists are completed.</li>
-              <li><b>5. Conduct</b> – the agency starts the exam, records attendance and incidents, and completes it.</li>
+              <li><b>1. Create</b> – the exam conducting agency picks the institute, center, exam mode, dates and candidate count.</li>
+              <li><b>2. Allocate</b> – Network Admin (online) or Center In-Charge (offline) assigns labs or classrooms; the exam is confirmed and everyone sees the allocation.</li>
+              <li><b>3. Ready</b> – network and center checklists are completed.</li>
+              <li><b>4. Conduct</b> – the agency starts the exam, records attendance and incidents, and completes it.</li>
             </ol>
           </div>
           <div>
