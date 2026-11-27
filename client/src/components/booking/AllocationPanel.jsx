@@ -3,7 +3,7 @@ import { Alert, Bar } from '../ui.jsx';
 import { api, errorMessage } from '../../lib/api.js';
 import { LAB_TYPES, fmtDate, seatRange } from '../../lib/format.js';
 
-export function ShiftAllocator({ suggestUrl, saveUrl, needed, current: currentList = [], onSaved }) {
+export function ShiftAllocator({ suggestUrl, saveUrl, needed, current: currentList = [], onSaved, unit = 'labs' }) {
   const [labs, setLabs] = useState(null);
   const [plan, setPlan] = useState({});
   const [error, setError] = useState('');
@@ -44,7 +44,7 @@ export function ShiftAllocator({ suggestUrl, saveUrl, needed, current: currentLi
     }
   };
 
-  if (!labs) return <button className="btn-secondary" onClick={open}>{currentList.length ? 'Change allocation' : 'Allocate labs'}</button>;
+  if (!labs) return <button className="btn-secondary" onClick={open}>{currentList.length ? 'Change allocation' : `Allocate ${unit}`}</button>;
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-brand-100 bg-brand-50/50 p-3">
       <Alert>{error}</Alert>
@@ -103,7 +103,7 @@ export default function AllocationPanel({ booking, allocation, actions, reload }
                 {sum.allocations.map((a) => <span key={a._id} className="rounded bg-slate-100 px-2 py-0.5 text-xs">{a.lab.code} · {a.lab.name}: <b>{a.seats}</b> <span className="text-slate-500">({seatRange(a)})</span></span>)}
               </div>
             )}
-            {canAllocate && <div className="mt-2"><ShiftAllocator suggestUrl={`/bookings/${booking._id}/allocations/suggest?shiftId=${s._id}`} saveUrl={`/bookings/${booking._id}/allocations/${s._id}`} needed={s.candidates} current={sum?.allocations} onSaved={reload} /></div>}
+            {canAllocate && <div className="mt-2"><ShiftAllocator unit={booking.mode === 'online' ? 'labs' : 'classrooms'} suggestUrl={`/bookings/${booking._id}/allocations/suggest?shiftId=${s._id}`} saveUrl={`/bookings/${booking._id}/allocations/${s._id}`} needed={s.candidates} current={sum?.allocations} onSaved={reload} /></div>}
           </div>
         );
       })}

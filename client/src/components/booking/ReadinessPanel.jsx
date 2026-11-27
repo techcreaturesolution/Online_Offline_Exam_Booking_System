@@ -51,7 +51,7 @@ export default function ReadinessPanel({ booking, checklists, actions, reload })
   return (
     <div className="card space-y-3">
       <h2 className="h2">Readiness checklists</h2>
-      {!['confirmed', 'ready', 'in_progress', 'completed'].includes(booking.status) && <p className="text-sm text-slate-500">Checklists open once the allocation is verified and the booking is confirmed.</p>}
+      {!['confirmed', 'ready', 'in_progress', 'completed'].includes(booking.status) && <p className="text-sm text-slate-500">Checklists open once every shift is fully allocated, which confirms the booking.</p>}
       <div className="grid gap-3 md:grid-cols-2">
         {booking.mode === 'online' && <Checklist booking={booking} kind="network" list={checklists.network} editable={actions.includes('readiness:network')} reload={reload} />}
         <Checklist booking={booking} kind="center" list={checklists.center} editable={actions.includes('readiness:center')} reload={reload} />
