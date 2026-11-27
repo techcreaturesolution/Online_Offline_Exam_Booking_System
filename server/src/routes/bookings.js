@@ -362,6 +362,7 @@ router.put('/:id/shifts/:shiftId/attendance', async (req, res) => {
     })
     .parse(req.body);
   let { present, absent } = body;
+  let writes = [];
   if (body.labs) {
     const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).populate('lab', 'code').lean();
     const byId = new Map(allocs.map((a) => [String(a._id), a]));
@@ -370,21 +371,22 @@ router.put('/:id/shifts/:shiftId/attendance', async (req, res) => {
       if (!a) throw new HttpError(400, 'Lab allocation not found for this shift');
       if (row.present > a.seats) throw new HttpError(400, `Lab ${a.lab.code} has only ${a.seats} allocated seats`);
     }
-    await LabAllocation.bulkWrite(body.labs.map((row) => ({ updateOne: { filter: { _id: row.allocation }, update: { $set: { present: row.present } } } })));
-    const fresh = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).lean();
-    present = fresh.reduce((n, a) => n + (a.present || 0), 0);
+    const sent = new Map(body.labs.map((row) => [row.allocation, row.present]));
+    present = allocs.reduce((n, a) => n + (sent.get(String(a._id)) ?? a.present ?? 0), 0);
     absent = shift.candidates - present;
     if (absent < 0) throw new HttpError(400, `Present exceeds the ${shift.candidates} registered candidates`);
+    writes = body.labs.map((row) => ({ updateOne: { filter: { _id: row.allocation }, update: { $set: { present: row.present } } } }));
   } else if (present != null) {
     const allocs = await LabAllocation.find({ booking: booking._id, shiftId: shift._id }).select('seats').lean();
     if (allocs.length > 1) throw new HttpError(400, 'This shift uses more than one classroom; record present per classroom');
     if (allocs.length === 1) {
       if (present > allocs[0].seats) throw new HttpError(400, `Only ${allocs[0].seats} seats are allocated`);
-      await LabAllocation.updateOne({ _id: allocs[0]._id }, { $set: { present } });
+      writes = [{ updateOne: { filter: { _id: allocs[0]._id }, update: { $set: { present } } } }];
     }
   }
   if (present == null || absent == null) throw new HttpError(400, 'Send present and absent counts or lab-wise attendance');
   if (present + absent !== shift.candidates) throw new HttpError(400, `Present + absent must equal the ${shift.candidates} registered candidates`);
+  if (writes.length) await LabAllocation.bulkWrite(writes);
   shift.attendance = { present, absent, recordedBy: req.user._id, recordedAt: new Date() };
   booking.timeline.push(event(req.user, 'attendance', `${shift.date} ${shift.startTime}: ${present} present, ${absent} absent`));
   await booking.save();
