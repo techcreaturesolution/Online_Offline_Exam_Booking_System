@@ -38,6 +38,15 @@ paths:
       requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string }, password: { type: string } } } } } }
       responses: { '200': { description: Token and user }, '401': { description: Invalid credentials } }
   /auth/register-institute: { post: { tags: [Auth], security: [], summary: Institute self-registration (pending approval), responses: { '201': { description: Created } } } }
+  /auth/signup-tenant: { post: { tags: [Tenancy], security: [], summary: Create an organisation (tenant) on trial and its first Super Admin, responses: { '201': { description: Created, returns token } , '409': { description: Address or email taken } } } }
+  /tenant: { get: { tags: [Tenancy], summary: Current tenant (Super Admin), responses: { '200': { description: OK } } }, patch: { tags: [Tenancy], summary: Update name, contact, branding and settings, responses: { '200': { description: OK } } } }
+  /tenant/export: { get: { tags: [Tenancy], summary: JSON export of all tenant data, responses: { '200': { description: OK } } } }
+  /tenant/delete: { post: { tags: [Tenancy], summary: Cancel the tenant; data deleted after 30 days, responses: { '200': { description: OK } } } }
+  /tenant/audit-logs: { get: { tags: [Tenancy], summary: Paginated audit log (filters action, entity, actor, from, to), responses: { '200': { description: OK } } } }
+  /tenant/audit-logs.csv: { get: { tags: [Tenancy], summary: Audit log CSV export, responses: { '200': { description: CSV } } } }
+  /platform/tenants: { get: { tags: [Platform], summary: All tenants with usage (Platform Owner), responses: { '200': { description: OK } } } }
+  /platform/tenants/{id}: { patch: { tags: [Platform], summary: Change tenant status or plan, parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: OK } } } }
+  /platform/tenants/{id}/impersonate: { post: { tags: [Platform], summary: Audited 30-minute support token for the tenant admin, parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { '200': { description: OK } } } }
   /auth/me: { get: { tags: [Auth], responses: { '200': { description: Current user } } } }
   /auth/password: { put: { tags: [Auth], summary: Change password (returns a fresh token), responses: { '200': { description: OK } } } }
   /meta: { get: { tags: [Meta], summary: Role labels and checklists, responses: { '200': { description: OK } } } }

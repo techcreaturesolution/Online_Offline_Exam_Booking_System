@@ -2,8 +2,8 @@
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 Foundation | Docs, Docker, CI, Prettier, env checks, OpenAPI, `/api/v1`, health/readiness | In progress |
-| 1 Multi-tenancy | SAAS-001–008, SEC-001, SEC-004–006, migration, cross-tenant isolation tests | Planned |
+| 0 Foundation | Docs, Docker, CI, Prettier, env checks, OpenAPI, `/api/v1`, health/readiness | Done |
+| 1 Multi-tenancy | SAAS-001–008, SEC-004–006, migration, cross-tenant isolation tests (SEC-001 permission matrix and SEC-005 refresh tokens deferred, see DECISIONS #8) | In review |
 | 2 Plans & billing | BILL-001–006, BILL-009 (Razorpay test mode) | Planned |
 | 3 Booking marketplace | BOOK-001–004, 007, 009 | Planned |
 | 4 Exam-day operations | OPS-001, 003, 005 (candidate portal CAND-* removed, see DECISIONS #6) | Planned |

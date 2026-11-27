@@ -1,4 +1,5 @@
 export const ROLES = {
+  PLATFORM_OWNER: 'platform_owner',
   SUPER_ADMIN: 'super_admin',
   INSTITUTE: 'institute_admin',
   VENDOR: 'booking_vendor',
@@ -8,8 +9,10 @@ export const ROLES = {
 };
 
 export const ROLE_LIST = Object.values(ROLES);
+export const TENANT_ROLES = ROLE_LIST.filter((r) => r !== ROLES.PLATFORM_OWNER);
 
 export const ROLE_LABELS = {
+  platform_owner: 'Platform Owner',
   super_admin: 'Super Admin',
   institute_admin: 'University / Institute',
   booking_vendor: 'Booking Vendor',

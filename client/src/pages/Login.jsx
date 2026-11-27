@@ -12,6 +12,8 @@ const DEMO = [
   ['network@examhub.test', 'network_admin'],
   ['center@examhub.test', 'center_incharge'],
   ['agency@examhub.test', 'exam_agency'],
+  ['admin@acme.test', 'super_admin'],
+  ['owner@examhub.test', 'platform_owner'],
 ];
 
 export default function Login() {
@@ -28,8 +30,8 @@ export default function Login() {
     setBusy(true);
     setError('');
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const u = await login(email, password);
+      navigate(u.role === 'platform_owner' ? '/platform' : '/dashboard');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -55,6 +57,7 @@ export default function Login() {
           <button className="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
           <p className="text-sm text-slate-600">
             University or institute? <Link className="text-brand-600 hover:underline" to="/register">Register for exam bookings</Link>
+            <br />New organisation? <Link className="text-brand-600 hover:underline" to="/signup">Start a free trial</Link>
           </p>
         </form>
         {import.meta.env.VITE_SHOW_DEMO_LOGINS !== 'false' && (

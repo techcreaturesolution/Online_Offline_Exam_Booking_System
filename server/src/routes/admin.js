@@ -3,8 +3,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Center } from '../models/Center.js';
 import { Organization } from '../models/Organization.js';
-import { ROLE_LIST, ROLES } from '../models/roles.js';
+import { TENANT_ROLES, ROLES } from '../models/roles.js';
 import { User } from '../models/User.js';
+import { audit } from '../services/audit.js';
 import { HttpError } from '../utils/httpError.js';
 import { passwordSchema } from './auth.js';
 
@@ -32,7 +33,7 @@ const userSchema = z.object({
   name: z.string().trim().min(2),
   email: z.string().email(),
   phone: z.string().trim().max(20).optional().default(''),
-  role: z.enum(ROLE_LIST),
+  role: z.enum(TENANT_ROLES),
   organization: objectId.nullable().optional(),
   centers: z.array(objectId).optional().default([]),
   password: passwordSchema,
@@ -47,7 +48,12 @@ router.get('/users', async (req, res) => {
   res.json({ users });
 });
 
+const noSupportCredentials = (req) => {
+  if (req.impersonatedBy) throw new HttpError(403, 'Support sessions cannot create accounts, set passwords or change roles');
+};
+
 router.post('/users', async (req, res) => {
+  noSupportCredentials(req);
   const body = userSchema.parse(req.body);
   if (await User.exists({ email: body.email.toLowerCase() })) throw new HttpError(409, 'Email already in use');
   const links = await checkLinks(body.role, body.organization, body.centers);
@@ -57,12 +63,14 @@ router.post('/users', async (req, res) => {
 
 router.put('/users/:id', async (req, res) => {
   const body = userSchema.partial().extend({ status: z.enum(['pending', 'active', 'disabled']).optional() }).parse(req.body);
+  if (body.password || body.role) noSupportCredentials(req);
   const user = await User.findById(req.params.id);
   if (!user) throw new HttpError(404, 'User not found');
   if (String(user._id) === String(req.user._id) && (body.status === 'disabled' || (body.role && body.role !== user.role))) {
     throw new HttpError(400, 'You cannot disable yourself or change your own role');
   }
   const role = body.role || user.role;
+  const before = { role: user.role, status: user.status, organization: user.organization, centers: user.centers };
   const links = await checkLinks(role, body.organization !== undefined ? body.organization : user.organization, body.centers || user.centers.map(String));
   if (body.password) {
     user.passwordHash = await bcrypt.hash(body.password, 10);
@@ -71,6 +79,7 @@ router.put('/users/:id', async (req, res) => {
   for (const k of ['name', 'email', 'phone', 'role', 'status']) if (body[k] !== undefined) user[k] = body[k];
   Object.assign(user, links);
   await user.save();
+  await audit(req, 'user.updated', 'User', user._id, before, { role: user.role, status: user.status, organization: user.organization, centers: user.centers });
   if (user.status === 'active' && user.organization) await Organization.updateOne({ _id: user.organization, active: false }, { active: true });
   res.json({ user: user.toSafe() });
 });

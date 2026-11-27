@@ -15,23 +15,32 @@ import Attendance from './pages/Attendance.jsx';
 import Planning from './pages/Planning.jsx';
 import Directory from './pages/Directory.jsx';
 import Register from './pages/Register.jsx';
+import Organisation from './pages/Organisation.jsx';
+import Platform from './pages/Platform.jsx';
+import SignupOrg from './pages/SignupOrg.jsx';
 import Utilization from './pages/Utilization.jsx';
 
 function Private({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  const home = user.role === 'platform_owner' ? '/platform' : '/dashboard';
+  if (roles ? !roles.includes(user.role) : user.role === 'platform_owner') return <Navigate to={home} replace />;
   return children;
 }
 
 export default function App() {
   const { user } = useAuth();
+  const home = user?.role === 'platform_owner' ? '/platform' : '/dashboard';
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
+      <Route path="/" element={user ? <Navigate to={home} replace /> : <Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/signup" element={<SignupOrg />} />
+      <Route element={<Private roles={['platform_owner']}><Layout /></Private>}>
+        <Route path="/platform" element={<Platform />} />
+      </Route>
       <Route element={<Private><Layout /></Private>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/bookings" element={<Bookings />} />
@@ -44,6 +53,7 @@ export default function App() {
         <Route path="/utilization" element={<Utilization />} />
         <Route path="/directory" element={<Private roles={['exam_agency', 'super_admin']}><Directory /></Private>} />
         <Route path="/admin" element={<Private roles={['super_admin']}><Admin /></Private>} />
+        <Route path="/organisation" element={<Private roles={['super_admin']}><Organisation /></Private>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

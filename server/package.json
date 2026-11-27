@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "lint": "eslint .",
     "seed:demo": "node scripts/seed-demo.js",
+    "migrate:tenant": "node scripts/migrate-default-tenant.js",
     "test": "node --test --test-concurrency=1"
   },
   "dependencies": {

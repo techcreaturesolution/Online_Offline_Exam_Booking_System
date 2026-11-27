@@ -1,4 +1,5 @@
 export const ROLE_LABELS = {
+  platform_owner: 'Platform Owner',
   super_admin: 'Super Admin',
   institute_admin: 'University / Institute',
   booking_vendor: 'Booking Vendor',

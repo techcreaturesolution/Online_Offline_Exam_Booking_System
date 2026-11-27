@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 import { ROLE_LIST } from './roles.js';
 
 const userSchema = new mongoose.Schema(
@@ -21,5 +22,7 @@ userSchema.methods.toSafe = function toSafe() {
   const { passwordHash: _p, __v: _v, ...rest } = this.toObject();
   return rest;
 };
+
+userSchema.plugin(tenantScoped, { required: false });
 
 export const User = mongoose.model('User', userSchema);

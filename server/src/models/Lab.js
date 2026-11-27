@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 
 const blockSchema = new mongoose.Schema(
   { from: { type: String, required: true }, to: { type: String, required: true }, reason: { type: String, default: '' } },
@@ -43,5 +44,7 @@ export function usableSeats(lab) {
 export function isBlocked(lab, date) {
   return (lab.maintenanceBlocks || []).some((b) => b.from <= date && date <= b.to);
 }
+
+labSchema.plugin(tenantScoped, {});
 
 export const Lab = mongoose.model('Lab', labSchema);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 
 const allocationSchema = new mongoose.Schema(
   {
@@ -21,5 +22,7 @@ const allocationSchema = new mongoose.Schema(
 allocationSchema.index({ lab: 1, date: 1 });
 allocationSchema.index({ center: 1, date: 1 });
 allocationSchema.index({ booking: 1, shiftId: 1, lab: 1 }, { unique: true });
+
+allocationSchema.plugin(tenantScoped, {});
 
 export const LabAllocation = mongoose.model('LabAllocation', allocationSchema);

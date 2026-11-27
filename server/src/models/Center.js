@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
+import { tenantScoped } from '../tenancy/plugin.js';
 
 const centerSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    code: { type: String, required: true, unique: true, trim: true, uppercase: true },
+    code: { type: String, required: true, trim: true, uppercase: true },
     address: { type: String, trim: true, default: '' },
     city: { type: String, required: true, trim: true },
     state: { type: String, required: true, trim: true },
@@ -21,5 +22,8 @@ const centerSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+centerSchema.plugin(tenantScoped, {});
+centerSchema.index({ tenant: 1, code: 1 }, { unique: true });
 
 export const Center = mongoose.model('Center', centerSchema);
