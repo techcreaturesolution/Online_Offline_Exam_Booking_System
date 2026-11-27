@@ -25,7 +25,7 @@ export const ACTION_LABELS = {
   edited: 'Booking edited',
   allocation_updated: 'Allocation updated',
   allocated: 'Allocation complete',
-  confirmed: 'Allocation verified & confirmed',
+  confirmed: 'Allocated & confirmed',
   agency_assigned: 'Agency assigned',
   network_checklist: 'Network checklist',
   center_checklist: 'Center checklist',
